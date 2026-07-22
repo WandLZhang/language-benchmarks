@@ -81,7 +81,13 @@ def _one_call(spec, system, user, grounding, max_tokens):
                     system=[{"type": "text", "text": system}],
                     messages=[{"role": "user", "content": user}])
         if grounding:
+            # FORCE a web fetch. Left to itself (even with thinking) Claude skips web_search
+            # ~99% of the time; tool_choice="any" guarantees at least one search while still
+            # letting it return the clean 2-line output (strict {"type":"tool"} makes it dump
+            # search commentary). Needs token headroom for the tool round-trip.
             opts["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]
+            opts["tool_choice"] = {"type": "any"}
+            opts["max_tokens"] = max(max_tokens, 8000)
         with _anthropic_client(spec.get("region", "global")).messages.stream(**opts) as stream:
             for ev in stream:
                 if getattr(ev, "type", None) == "content_block_delta" and hasattr(ev, "delta"):
@@ -98,9 +104,15 @@ def _one_call(spec, system, user, grounding, max_tokens):
 
     elif provider == "gemini":
         from google.genai import types
-        cfg = dict(system_instruction=system, max_output_tokens=max_tokens)
+        sys_instr = system
+        cfg = dict(max_output_tokens=max_tokens)
         if grounding:
             cfg["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+            # Gemini's google_search can't be forced via tool_choice/tool_config; a hard system
+            # instruction is what reliably makes it actually search (verified: 0 -> 3 chunks).
+            sys_instr = ("You MUST call the google_search tool to verify CURRENT Hong Kong usage "
+                         "BEFORE answering. Never answer from memory.\n\n") + system
+        cfg["system_instruction"] = sys_instr
         gclient = _genai_client(spec.get("region", "global"))  # hold ref: must outlive the stream
         stream = gclient.models.generate_content_stream(
             model=spec["vertex_id"], contents=user, config=types.GenerateContentConfig(**cfg))
@@ -112,6 +124,14 @@ def _one_call(spec, system, user, grounding, max_tokens):
                 um = chunk.usage_metadata
                 usage = {"input_tokens": getattr(um, "prompt_token_count", None),
                          "output_tokens": getattr(um, "candidates_token_count", None)}
+            # Capture google_search grounding usage (was previously unmeasured for Gemini).
+            for cand in (getattr(chunk, "candidates", None) or []):
+                gm = getattr(cand, "grounding_metadata", None)
+                for gc in (getattr(gm, "grounding_chunks", None) or []):
+                    web = getattr(gc, "web", None)
+                    url = getattr(web, "uri", None) if web else None
+                    if url and url not in {c["url"] for c in citations}:
+                        citations.append({"url": url, "title": getattr(web, "title", "")})
 
     elif provider == "maas":
         model = f'{spec["publisher"]}/{spec["vertex_id"]}'

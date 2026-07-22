@@ -13,7 +13,7 @@ prompt_file: prompt.md              # span-output system prompt (WebView rendere
 prompt_plain_file: prompt-plain.md  # bare-text system prompt (native renderer)
 testset_file: testset.jsonl         # real usage (from Firestore) + slang + culture tiers
 user_template: "Translate to colloquial Cantonese and Mandarin:\n\n{text}"
-max_tokens: 2048
+max_tokens: 8000
 
 # Context-mode axis: tiers listed here are ALSO run with web-grounding (context mode
 # "web-grounding") so the leaderboard can show the retrieval/grounding delta. Roadmap

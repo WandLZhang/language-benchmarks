@@ -127,8 +127,15 @@ def main():
             notes.append(f"- **{cfg['title']}** — {len(cfg['models'])} models × context modes "
                          "(none · web-grounding · glossary-RAG); results pending.")
 
-    (ROOT / "README.md").write_text(HEADER + "\n## Leaderboard\n" + banner + "\n" + "\n".join(h)
-                                    + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
+    web_caveat = (
+        "\n> **⚠️ Web Δ is provisional this round.** Hosted web-grounding barely fires on Vertex "
+        "unless forced. Claude's `web_search` is forcible via `tool_choice` (fires 100%); Gemini's "
+        "`google_search` won't fire inside the translation prompt even when hard-prompted. The "
+        "codified fix is a **two-step forced fetch** (lean forced Gemini google_search → inject → "
+        "translate), verified **100% firing over 30 trials**. The web arm is being **re-run with "
+        "that forced fetch for every model**. The **Quality (no-context) ranking is final.**\n")
+    (ROOT / "README.md").write_text(HEADER + "\n## Leaderboard\n" + banner + web_caveat + "\n"
+                                    + "\n".join(h) + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
     print(f"Wrote {ROOT/'README.md'} ({'pending' if pending else 'scored'}), "
           f"{len(tasks)} task(s), {len(order)} models.")
 

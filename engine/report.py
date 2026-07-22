@@ -70,25 +70,25 @@ def main():
             wins[key][0] += 1
 
     def qm(m, c):
-        return mean(q[(m, "ungrounded")].get(c, []))
+        return mean(q[(m, "none")].get(c, []))
 
-    tiers = sorted({j["tier"] for j in judged if j["condition"] == "ungrounded"})
-    gtiers = sorted({t for (m, t, c) in q_tier if c == "grounded"})
-    models = sorted([m for m in specs if (m, "ungrounded") in q], key=lambda m: (qm(m, "overall") or 0), reverse=True)
+    tiers = sorted({j["tier"] for j in judged if j["condition"] == "none"})
+    gtiers = sorted({t for (m, t, c) in q_tier if c == "web"})
+    models = sorted([m for m in specs if (m, "none") in q], key=lambda m: (qm(m, "overall") or 0), reverse=True)
 
     # ---- machine-readable summary for the leaderboard ----
     summary = {"task": task["name"], "title": task["title"], "n_items": len({r["item_id"] for r in raw}),
                "judges": [j["id"] for j in task["judges"]], "tiers": tiers, "models": {}}
     for m in models:
-        off = [v for t in gtiers for v in q_tier[(m, t, "ungrounded")]]
-        on = [v for t in gtiers for v in q_tier[(m, t, "grounded")]]
-        w = wins[(m, "ungrounded")]
+        off = [v for t in gtiers for v in q_tier[(m, t, "none")]]
+        on = [v for t in gtiers for v in q_tier[(m, t, "web")]]
+        w = wins[(m, "none")]
         summary["models"][m] = {
             **{c: qm(m, c) for c in metrics},
             "win_pct": (100 * w[0] / w[1]) if w[1] else None,
             "p50_total_s": pct(lat[m]["total"], .5), "p95_total_s": pct(lat[m]["total"], .95),
             "ttft_p50_s": pct(lat[m]["ttft"], .5), "ok": lat[m]["ok"], "n": lat[m]["n"],
-            "by_tier": {t: mean(q_tier[(m, t, "ungrounded")]) for t in tiers},
+            "by_tier": {t: mean(q_tier[(m, t, "none")]) for t in tiers},
             "grounding": {"off": mean(off), "on": mean(on),
                           "delta": (mean(on) - mean(off)) if (mean(off) is not None and mean(on) is not None) else None},
         }
@@ -103,13 +103,13 @@ def main():
          "| Model | Overall | " + " | ".join(c.replace("_", " ") for c in metrics if c != "overall") + " | Win% |",
          "|---|---|" + "---|" * len(metrics)]
     for m in models:
-        w = wins[(m, "ungrounded")]; wp = f"{100*w[0]/w[1]:.0f}%" if w[1] else "-"
+        w = wins[(m, "none")]; wp = f"{100*w[0]/w[1]:.0f}%" if w[1] else "-"
         cells = " | ".join(fmt(qm(m, c)) for c in metrics if c != "overall")
         L.append(f"| {m} | **{fmt(qm(m,'overall'))}** | {cells} | {wp} |")
     L += ["\n## Quality by tier (no-context overall)\n", "| Model | " + " | ".join(tiers) + " |",
           "|---|" + "---|" * len(tiers)]
     for m in models:
-        L.append(f"| {m} | " + " | ".join(fmt(mean(q_tier[(m, t, 'ungrounded')])) for t in tiers) + " |")
+        L.append(f"| {m} | " + " | ".join(fmt(mean(q_tier[(m, t, 'none')])) for t in tiers) + " |")
     L += ["\n## Latency (no-context)\n", "| Model | p50 total | p95 total | p50 TTFT | ok |",
           "|---|---|---|---|---|"]
     for m in models:
