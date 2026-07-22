@@ -42,12 +42,12 @@ def run_one(task, model, item, context):
     if context == "glossary":
         system = system + rag.context_block(item["text"], k=task.get("rag_top_k", 4))
     elif context == "web":
-        if model.get("grounding"):
-            grounding = True          # native hosted search (Claude web_search / Gemini google_search)
-            impl = "web-native"
-        else:                         # Grok/Qwen/DeepSeek: inject homegrown Gemini-google-search fetch
-            system = system + webfetch.block(webfetch.gemini_fetch(item["text"]))
-            impl = "web-injected"
+        # Uniform FORCED grounding for every model: inject a lean forced Gemini-google-search
+        # fetch (verified to fire 100%). Native self-search is unreliable — Gemini won't fire
+        # inside the translation prompt even when hard-prompted — so we never rely on it; this
+        # keeps "web" identical across models (a clean, genuinely-grounded comparison).
+        system = system + webfetch.block(webfetch.gemini_fetch(item["text"]))
+        impl = "web-injected"
     r = providers.call_model(model, system, task["user_template"].format(text=item["text"]),
                              grounding=grounding, max_tokens=task.get("max_tokens", 2048))
     return {"model_id": model["id"], "provider": model["provider"], "vertex_id": model["vertex_id"],

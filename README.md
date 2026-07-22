@@ -12,7 +12,7 @@ delta on the hard tiers — positive = grounding helped).
 
 ## Leaderboard
 
-> **⚠️ Web Δ is provisional this round.** Hosted web-grounding barely fires on Vertex unless forced. Claude's `web_search` is forcible via `tool_choice` (fires 100%); Gemini's `google_search` won't fire inside the translation prompt even when hard-prompted. The codified fix is a **two-step forced fetch** (lean forced Gemini google_search → inject → translate), verified **100% firing over 30 trials**. The web arm is being **re-run with that forced fetch for every model**. The **Quality (no-context) ranking is final.**
+> **Web Δ = FORCED web-grounding.** Hosted search barely fires on Vertex on its own, and Gemini's `google_search` can't be forced inside a task prompt at all — so `web` injects a lean **forced** Gemini google_search fetch (verified **100% firing over 30 trials**) into every model. **Finding: forced web lifts nearly every model, and most the weaker/cheaper ones** (grok-4.1-fast +0.79, qwen3-235b +0.69, sonnet-4-6 +0.54), compressing the field — while the leader (gemini-3.5-flash) is already at ceiling (−0.03). A fast model + forced web (grok-4.1-fast 3.96 @ 0.55s, sonnet-4-6 4.23 @ 1.7s) rivals the slow quality leaders.
 
 <table>
 <thead>
@@ -28,16 +28,16 @@ delta on the hard tiers — positive = grounding helped).
 </tr>
 </thead>
 <tbody>
-<tr><td><b>gemini-3.5-flash</b></td><td align="center"><b>4.28</b></td><td align="center">21%</td><td align="center">6.98</td><td align="center">0.01</td></tr>
-<tr><td><b>gemini-3.6-flash</b></td><td align="center"><b>4.22</b></td><td align="center">17%</td><td align="center">5.20</td><td align="center">-0.02</td></tr>
-<tr><td><b>claude-opus-4-8</b></td><td align="center"><b>4.09</b></td><td align="center">14%</td><td align="center">1.94</td><td align="center">-0.05</td></tr>
-<tr><td><b>claude-sonnet-5</b></td><td align="center"><b>3.99</b></td><td align="center">12%</td><td align="center">3.19</td><td align="center">-0.01</td></tr>
-<tr><td><b>deepseek-v3.2</b></td><td align="center"><b>3.86</b></td><td align="center">8%</td><td align="center">2.67</td><td align="center">0.13</td></tr>
-<tr><td><b>gemini-3.5-flash-lite</b></td><td align="center"><b>3.78</b></td><td align="center">7%</td><td align="center">2.21</td><td align="center">-0.11</td></tr>
-<tr><td><b>claude-sonnet-4-6</b></td><td align="center"><b>3.67</b></td><td align="center">8%</td><td align="center">1.81</td><td align="center">0.15</td></tr>
-<tr><td><b>grok-4.20</b></td><td align="center"><b>3.50</b></td><td align="center">7%</td><td align="center">0.48</td><td align="center">0.37</td></tr>
-<tr><td><b>qwen3-235b</b></td><td align="center"><b>3.26</b></td><td align="center">4%</td><td align="center">0.94</td><td align="center">0.62</td></tr>
-<tr><td><b>grok-4.1-fast</b></td><td align="center"><b>3.22</b></td><td align="center">3%</td><td align="center">0.59</td><td align="center">0.51</td></tr>
+<tr><td><b>gemini-3.5-flash</b></td><td align="center"><b>4.36</b></td><td align="center">25%</td><td align="center">6.51</td><td align="center">-0.03</td></tr>
+<tr><td><b>gemini-3.6-flash</b></td><td align="center"><b>4.25</b></td><td align="center">16%</td><td align="center">4.72</td><td align="center">0.10</td></tr>
+<tr><td><b>claude-opus-4-8</b></td><td align="center"><b>4.13</b></td><td align="center">15%</td><td align="center">1.80</td><td align="center">0.18</td></tr>
+<tr><td><b>claude-sonnet-5</b></td><td align="center"><b>4.02</b></td><td align="center">12%</td><td align="center">2.06</td><td align="center">0.30</td></tr>
+<tr><td><b>deepseek-v3.2</b></td><td align="center"><b>3.83</b></td><td align="center">7%</td><td align="center">2.11</td><td align="center">0.30</td></tr>
+<tr><td><b>gemini-3.5-flash-lite</b></td><td align="center"><b>3.80</b></td><td align="center">6%</td><td align="center">2.12</td><td align="center">0.39</td></tr>
+<tr><td><b>claude-sonnet-4-6</b></td><td align="center"><b>3.70</b></td><td align="center">8%</td><td align="center">1.70</td><td align="center">0.54</td></tr>
+<tr><td><b>grok-4.20</b></td><td align="center"><b>3.54</b></td><td align="center">7%</td><td align="center">0.53</td><td align="center">0.41</td></tr>
+<tr><td><b>qwen3-235b</b></td><td align="center"><b>3.30</b></td><td align="center">4%</td><td align="center">1.01</td><td align="center">0.69</td></tr>
+<tr><td><b>grok-4.1-fast</b></td><td align="center"><b>3.17</b></td><td align="center">2%</td><td align="center">0.55</td><td align="center">0.79</td></tr>
 </tbody>
 </table>
 

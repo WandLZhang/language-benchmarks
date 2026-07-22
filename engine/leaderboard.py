@@ -52,10 +52,11 @@ Add a task: create `tasks/<name>/task.yaml` (models, judges, rubric, prompt, tes
 
 
 def latest_summary(task_dir):
-    res = sorted((task_dir / "results").glob("*/summary.json")) if (task_dir / "results").exists() else []
+    res = list((task_dir / "results").glob("*/summary.json")) if (task_dir / "results").exists() else []
     if not res:
         return None
-    return json.loads(res[-1].read_text())
+    latest = max(res, key=lambda p: p.stat().st_mtime)  # newest by mtime, not name
+    return json.loads(latest.read_text())
 
 
 def fmt(x, nd=2):
@@ -128,12 +129,13 @@ def main():
                          "(none · web-grounding · glossary-RAG); results pending.")
 
     web_caveat = (
-        "\n> **⚠️ Web Δ is provisional this round.** Hosted web-grounding barely fires on Vertex "
-        "unless forced. Claude's `web_search` is forcible via `tool_choice` (fires 100%); Gemini's "
-        "`google_search` won't fire inside the translation prompt even when hard-prompted. The "
-        "codified fix is a **two-step forced fetch** (lean forced Gemini google_search → inject → "
-        "translate), verified **100% firing over 30 trials**. The web arm is being **re-run with "
-        "that forced fetch for every model**. The **Quality (no-context) ranking is final.**\n")
+        "\n> **Web Δ = FORCED web-grounding.** Hosted search barely fires on Vertex on its own, and "
+        "Gemini's `google_search` can't be forced inside a task prompt at all — so `web` injects a "
+        "lean **forced** Gemini google_search fetch (verified **100% firing over 30 trials**) into "
+        "every model. **Finding: forced web lifts nearly every model, and most the weaker/cheaper "
+        "ones** (grok-4.1-fast +0.79, qwen3-235b +0.69, sonnet-4-6 +0.54), compressing the field — "
+        "while the leader (gemini-3.5-flash) is already at ceiling (−0.03). A fast model + forced "
+        "web (grok-4.1-fast 3.96 @ 0.55s, sonnet-4-6 4.23 @ 1.7s) rivals the slow quality leaders.\n")
     (ROOT / "README.md").write_text(HEADER + "\n## Leaderboard\n" + banner + web_caveat + "\n"
                                     + "\n".join(h) + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
     print(f"Wrote {ROOT/'README.md'} ({'pending' if pending else 'scored'}), "
