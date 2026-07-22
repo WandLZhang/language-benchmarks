@@ -18,31 +18,26 @@ delta on the hard tiers — positive = grounding helped).
 <thead>
 <tr>
 <th rowspan="2">Model</th>
-<th colspan="9" align="center">Cantonese Colloquial Translation</th>
+<th colspan="4" align="center">Cantonese Colloquial Translation</th>
 </tr>
 <tr>
-<th>Overall</th>
-<th>Canto</th>
-<th>Man</th>
-<th>Mean</th>
-<th>Nat</th>
-<th>Fmt</th>
+<th>Quality (1-5)</th>
 <th>Win%</th>
 <th>p50 s</th>
 <th>Web Δ</th>
 </tr>
 </thead>
 <tbody>
-<tr><td><b>claude-opus-4-8</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>claude-sonnet-5</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>claude-sonnet-4-6</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>gemini-3.6-flash</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>gemini-3.5-flash</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>gemini-3.5-flash-lite</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>grok-4.20</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>grok-4.1-fast</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>qwen3-235b</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
-<tr><td><b>deepseek-v3.2</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>claude-opus-4-8</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>claude-sonnet-5</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>claude-sonnet-4-6</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>gemini-3.6-flash</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>gemini-3.5-flash</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>gemini-3.5-flash-lite</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>grok-4.20</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>grok-4.1-fast</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>qwen3-235b</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
+<tr><td><b>deepseek-v3.2</b></td><td align="center">—</td><td align="center">—</td><td align="center">—</td><td align="center">—</td></tr>
 </tbody>
 </table>
 

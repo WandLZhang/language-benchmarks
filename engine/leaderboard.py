@@ -12,9 +12,9 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TASKS = ROOT / "tasks"
 
-# metric key -> short column header
-SHORT = {"overall": "Overall", "cantonese_authenticity": "Canto", "mandarin_correctness": "Man",
-         "meaning_fidelity": "Mean", "naturalness": "Nat", "format_validity": "Fmt"}
+# metric key -> short column header. Single quality metric: "did it produce correct,
+# authentic colloquial HK Cantonese for the input?"
+SHORT = {"overall": "Quality (1-5)"}
 
 HEADER = """# language-benchmarks
 

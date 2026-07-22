@@ -26,22 +26,22 @@ judges:
   - {id: opus-judge,   provider: anthropic, vertex_id: claude-opus-4-8, region: global}
   - {id: gemini-judge, provider: gemini,    vertex_id: gemini-3.6-flash, region: global}
 
-metrics: [overall, cantonese_authenticity, mandarin_correctness, meaning_fidelity, naturalness, format_validity]
+# One quality metric: did it complete the task — correct, authentic colloquial HK Cantonese?
+# (meaning fidelity + authenticity + naturalness + valid output all roll into this; Mandarin
+# correctness is not scored — it's not the point of this task.)
+metrics: [overall]
 
 rubric: |
-  You are grading English -> Chinese translations. Each candidate translated the SAME English
-  input into (1) Mandarin and (2) authentic COLLOQUIAL Hong Kong Cantonese (口語, spoken register
-  — NOT written 書面語), Traditional characters, wrapped in <span class="zh-cmn">/<span class="zh-yue">.
-  Score EACH candidate 1-5 (5 best) on:
-  - cantonese_authenticity: genuine colloquial HK Cantonese (嘅/喺/唔/佢/啲/咗, right particles &
-    classifiers), not Mandarin-in-disguise or over-vulgar.
-  - mandarin_correctness: natural, correct Mandarin.
-  - meaning_fidelity: preserves the English meaning, register and tone included.
-  - naturalness: a real HK speaker would actually say the Cantonese line.
-  - format_validity: correct zh-cmn/zh-yue spans, both languages present, NO romanization leaked.
-    Empty/garbled = 1.
-  Then overall (1-5, weight Cantonese authenticity most) and a <=12-word rationale. Be discriminating.
-  Return ONLY JSON: {"scores":{"A":{"cantonese_authenticity":n,...,"overall":n,"rationale":"..."},...},"best":"X"}
+  You are grading English -> Hong Kong Cantonese translations. Each candidate rendered the SAME
+  English input into colloquial Cantonese (it also prints a Mandarin line — IGNORE that for scoring).
+  Judge ONE thing: did it complete the task — a CORRECT and AUTHENTIC colloquial Hong Kong Cantonese
+  (口語, spoken register) rendering of the input's meaning?
+  Score 1-5 (5 best). Penalise any of: wrong or lost meaning; Mandarin-in-disguise / written 書面語
+  instead of spoken 口語 (missing 嘅/喺/唔/佢/啲/咗, wrong particles or classifiers); phrasing no real
+  HK speaker would say; wrong or over-vulgar register; broken output (no Cantonese, romanization
+  leaked, empty or garbled).
+  Be discriminating — don't cluster scores. Return ONLY JSON:
+  {"scores":{"A":{"overall":n,"rationale":"<=12 words"},...},"best":"X"}
 
 # Candidate models (Vertex AI Model Garden IDs verified 2026-07-22 in wz-cloud-claude).
 # grounding: true = provider has a hosted web-search tool (Anthropic web_search / Gemini google_search).
