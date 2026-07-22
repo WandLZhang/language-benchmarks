@@ -1,0 +1,61 @@
+# Task definition consumed by the generic engine (engine/run_bench.py, judge.py, report.py).
+# Everything task-specific lives here; the engine is task-agnostic.
+
+name: cantonese-colloquial-translation
+title: "Cantonese Colloquial Translation"   # merged super-header in the README leaderboard
+description: >
+  English -> authentic everyday Hong Kong Cantonese (口語) + Mandarin. Reference-free:
+  quality is graded by an LLM panel on authenticity/register, since FLORES-style gold
+  references for colloquial Cantonese don't exist (FLORES yue_Hant is written Standard
+  Chinese, not spoken Cantonese).
+
+prompt_file: prompt.md              # span-output system prompt (WebView renderer)
+prompt_plain_file: prompt-plain.md  # bare-text system prompt (native renderer)
+testset_file: testset.jsonl         # real usage (from Firestore) + slang + culture tiers
+user_template: "Translate to colloquial Cantonese and Mandarin:\n\n{text}"
+max_tokens: 2048
+
+# Context-mode axis: tiers listed here are ALSO run with web-grounding (context mode
+# "web-grounding") so the leaderboard can show the retrieval/grounding delta. Roadmap
+# modes: glossary-RAG (words.hk / Chain-of-Dictionary), TM-RAG (fuzzy few-shot).
+grounded_tiers: [slang, culture, hk_loaded]
+
+# LLM-judge panel (anonymized + comparative). Two families to blunt self-preference
+# (opus is also a candidate, so the Gemini cross-judge is the guard).
+judges:
+  - {id: opus-judge,   provider: anthropic, vertex_id: claude-opus-4-8, region: global}
+  - {id: gemini-judge, provider: gemini,    vertex_id: gemini-3.6-flash, region: global}
+
+metrics: [overall, cantonese_authenticity, mandarin_correctness, meaning_fidelity, naturalness, format_validity]
+
+rubric: |
+  You are grading English -> Chinese translations. Each candidate translated the SAME English
+  input into (1) Mandarin and (2) authentic COLLOQUIAL Hong Kong Cantonese (口語, spoken register
+  — NOT written 書面語), Traditional characters, wrapped in <span class="zh-cmn">/<span class="zh-yue">.
+  Score EACH candidate 1-5 (5 best) on:
+  - cantonese_authenticity: genuine colloquial HK Cantonese (嘅/喺/唔/佢/啲/咗, right particles &
+    classifiers), not Mandarin-in-disguise or over-vulgar.
+  - mandarin_correctness: natural, correct Mandarin.
+  - meaning_fidelity: preserves the English meaning, register and tone included.
+  - naturalness: a real HK speaker would actually say the Cantonese line.
+  - format_validity: correct zh-cmn/zh-yue spans, both languages present, NO romanization leaked.
+    Empty/garbled = 1.
+  Then overall (1-5, weight Cantonese authenticity most) and a <=12-word rationale. Be discriminating.
+  Return ONLY JSON: {"scores":{"A":{"cantonese_authenticity":n,...,"overall":n,"rationale":"..."},...},"best":"X"}
+
+# Candidate models (Vertex AI Model Garden IDs verified 2026-07-22 in wz-cloud-claude).
+# grounding: true = provider has a hosted web-search tool (Anthropic web_search / Gemini google_search).
+models:
+  - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, grounding: true}
+  - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, grounding: true}
+  - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: true}
+  - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global, grounding: true}
+  - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global, grounding: true}
+  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global, grounding: true}
+  - {id: grok-4.20,             provider: maas, publisher: xai,         vertex_id: grok-4.20-non-reasoning, region: global, grounding: false}
+  - {id: grok-4.1-fast,         provider: maas, publisher: xai,         vertex_id: grok-4.1-fast-non-reasoning, region: global, grounding: false}
+  - {id: qwen3-235b,            provider: maas, publisher: qwen,        vertex_id: qwen3-235b-a22b-instruct-2507-maas, region: global, grounding: false}
+  - {id: deepseek-v3.2,         provider: maas, publisher: deepseek-ai, vertex_id: deepseek-v3.2-maas, region: global, grounding: false}
+  # Excluded: kimi-k2-thinking (unusable — empty outputs / 18s+ latency, documented round 1).
+  # grounding:false models can't self-search on Vertex MaaS; in web mode they get an injected
+  # Gemini-google-search fetch (see engine/webfetch.py; bake-off winner over Claude web_search 28-17).

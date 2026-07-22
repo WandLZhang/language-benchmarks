@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Run artifacts (regenerated; the README carries published aggregate numbers)
+tasks/*/results/
+
+# PRIVATE — the user's real personal translation queries. NEVER commit.
+tasks/*/testset_real.jsonl
+tasks/*/testset_full_local.jsonl
+
+.DS_Store
+*.env
+service-account*.json
