@@ -1,0 +1,62 @@
+# Generation-quality task: given a target word + a personal fact, write ONE natural colloquial
+# sentence that USES the word (the real chinese-convo-live build_prompt task). Reference-free;
+# an LLM panel grades word-usage/register, construction, and naturalness — the axes the synonym-
+# recall + latency benchmarks never measured. Run only in the no-context mode (production uses no
+# runtime RAG — the colloquial word is precomputed).
+
+name: chinese-sentence-generation
+title: "Chinese Sentence Generation (word + context)"
+description: >
+  Given a target vocabulary word, a language (Cantonese or Mandarin), and a fact about the
+  learner, write ONE natural colloquial sentence that uses the word in its correct register.
+  Graded by an LLM panel on word-usage/register, grammar/construction, and naturalness.
+
+prompt_file: prompt.md
+testset_file: testset.jsonl
+user_template: "{text}"
+max_tokens: 1200   # headroom for thinking models (opus-5 spends ~130 tokens thinking before the text)
+
+# Judge panel: two families, anonymized + comparative (blunts self-preference; grok/qwen/deepseek
+# are candidates, and opus is too, so the Gemini cross-judge is the guard).
+judges:
+  - {id: opus-judge,   provider: anthropic, vertex_id: claude-opus-4-8,  region: global}
+  - {id: gemini-judge, provider: gemini,    vertex_id: gemini-3.6-flash,  region: global}
+
+metrics: [overall]
+
+rubric: |
+  You are judging short CHINESE PRACTICE SENTENCES. Each candidate was asked to write ONE natural,
+  colloquial sentence that USES a given target word (in the given LANGUAGE) and ties to a FACT about
+  the learner. The input block below shows the language, the target word, and the fact.
+
+  Give ONE holistic Quality score, 1-5 (5 best), per candidate, judged on:
+  1. WORD USAGE & REGISTER (most important) — does it contain the exact target word, used correctly
+     and in a register a real speaker would use for THAT word? Forcing a formal/written/legalistic
+     word (e.g. 担保, 洽談, 採納) into a breezy casual line, or using a wrong sense, is a major flaw.
+  2. GRAMMAR & CONSTRUCTION — grammatical; no register/logic clashes (e.g. asserting 担保/保证 then
+     softening with 吧; mismatched particles or classifiers).
+  3. NATURALNESS — a real Cantonese/Mandarin speaker would actually say this out loud.
+  4. RELEVANCE — plausibly ties to the fact.
+
+  Cap the score at 1 if the candidate does NOT contain the target word, is in the wrong language,
+  leaked romanization, is empty, or is garbled. For Cantonese it must be colloquial 口語 in
+  Traditional characters (嘅/喺/唔/佢/啲/咗), not Mandarin-in-disguise or written 書面語.
+
+  Be discriminating — do NOT cluster scores; use the full 1-5 range. Return ONLY JSON:
+  {"scores":{"A":{"overall":n,"rationale":"<=12 words"},...},"best":"X"}
+
+# Full Model Garden roster (Vertex IDs verified 2026-07-22 in wz-cloud-claude), incl. the app's
+# current generator grok-4.1-fast.
+models:
+  - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, grounding: false}
+  - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, grounding: false}
+  - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, grounding: false}
+  - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: false}
+  - {id: claude-haiku-4-5,      provider: anthropic, vertex_id: claude-haiku-4-5,      region: global, grounding: false}
+  - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global, grounding: false}
+  - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global, grounding: false}
+  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global, grounding: false}
+  - {id: grok-4.20,             provider: maas, publisher: xai,         vertex_id: grok-4.20-non-reasoning,            region: global, grounding: false}
+  - {id: grok-4.1-fast,         provider: maas, publisher: xai,         vertex_id: grok-4.1-fast-non-reasoning,        region: global, grounding: false}
+  - {id: qwen3-235b,            provider: maas, publisher: qwen,        vertex_id: qwen3-235b-a22b-instruct-2507-maas, region: global, grounding: false}
+  - {id: deepseek-v3.2,         provider: maas, publisher: deepseek-ai, vertex_id: deepseek-v3.2-maas,                 region: global, grounding: false}

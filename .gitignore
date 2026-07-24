@@ -8,6 +8,9 @@ tasks/*/results/
 # PRIVATE — the user's real personal translation queries. NEVER commit.
 tasks/*/testset_real.jsonl
 tasks/*/testset_full_local.jsonl
+# PRIVATE — sentence-gen prompts embed personal facts (family, work). Kept local; the task's
+# aggregate scores are still published in the README, only the raw items stay off GitHub.
+tasks/chinese-sentence-generation/testset.jsonl
 
 .DS_Store
 *.env
