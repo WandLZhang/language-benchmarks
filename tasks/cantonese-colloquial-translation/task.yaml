@@ -50,10 +50,19 @@ rubric: |
 # grounding: true = provider has a hosted web-search tool (Anthropic web_search / Gemini google_search).
 models:
   - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, grounding: true}
-  # Optional reasoning arm (supported by engine/providers.py, not run in the published table —
-  # it'd be an extra row, not an extra column). Opus 5 uses adaptive thinking + output_config.effort;
-  # the older thinking.budget_tokens API 400s on it. Uncomment to include:
-  # - {id: claude-opus-5-think, provider: anthropic, vertex_id: claude-opus-5, region: global, grounding: true, effort: high}
+  # --- no-thinking arms (extra ROWS, same columns) -------------------------------------------
+  # Only these four think by default (probed): opus-5 −0.67s, sonnet-5 −0.70s, gemini-3.6 −3.07s,
+  # gemini-3.5-flash −3.52s. The rest already don't think, so a no-think arm would duplicate them.
+  # Anthropic: thinking.type=disabled. Gemini: thinking_budget=0.
+  # Not run: even with thinking off, none of these (2.05-2.30s p50) beats claude-opus-4-8 at
+  # 1.90s WITH its default, so a judged pass couldn't change a latency-bound choice. Uncomment
+  # to measure whether disabling thinking also costs quality:
+  # - {id: claude-opus-5-nothink,    provider: anthropic, vertex_id: claude-opus-5,    region: global, grounding: true, thinking: disabled}
+  # - {id: claude-sonnet-5-nothink,  provider: anthropic, vertex_id: claude-sonnet-5,  region: global, grounding: true, thinking: disabled}
+  # - {id: gemini-3.6-flash-nothink, provider: gemini,    vertex_id: gemini-3.6-flash, region: global, grounding: true, thinking: disabled}
+  # - {id: gemini-3.5-flash-nothink, provider: gemini,    vertex_id: gemini-3.5-flash, region: global, grounding: true, thinking: disabled}
+  # Adaptive-effort arm (Opus 5 API), available but not run: effort: low|medium|high
+  # - {id: claude-opus-5-effort-low, provider: anthropic, vertex_id: claude-opus-5, region: global, grounding: true, effort: low}
   - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, grounding: true}
   - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, grounding: true}
   - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: true}

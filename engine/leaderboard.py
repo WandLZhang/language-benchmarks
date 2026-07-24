@@ -133,9 +133,10 @@ def main():
         "Gemini's `google_search` can't be forced inside a task prompt at all — so `web` injects a "
         "lean **forced** Gemini google_search fetch (verified **100% firing over 30 trials**) into "
         "every model. **Finding: forced web lifts nearly every model, and most the weaker/cheaper "
-        "ones** (grok-4.1-fast +0.79, qwen3-235b +0.69, sonnet-4-6 +0.54), compressing the field — "
-        "while the leader (gemini-3.5-flash) is already at ceiling (−0.03). A fast model + forced "
-        "web (grok-4.1-fast 3.96 @ 0.55s, sonnet-4-6 4.23 @ 1.7s) rivals the slow quality leaders.\n")
+        "ones** (grok-4.1-fast +0.71, qwen3-235b +0.70, sonnet-4-6 +0.57), compressing the field — "
+        "while the leaders are already at ceiling (gemini-3.5-flash +0.00, claude-opus-5 +0.03). A "
+        "fast model + forced web (sonnet-4-6 4.22 @ 1.7s, grok-4.1-fast 3.88 @ 0.55s) closes much of "
+        "the gap to the slow quality leaders.\n")
     (ROOT / "README.md").write_text(HEADER + "\n## Leaderboard\n" + banner + web_caveat + "\n"
                                     + "\n".join(h) + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
     print(f"Wrote {ROOT/'README.md'} ({'pending' if pending else 'scored'}), "

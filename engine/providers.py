@@ -81,14 +81,18 @@ def _one_call(spec, system, user, grounding, max_tokens):
     #   effort:   "low"|"medium"|"high"  -> Opus 5+ API (adaptive thinking + output_config.effort)
     #   thinking: <token budget>         -> older Claude API (thinking.type.enabled)
     #   thinking: 0 on Gemini            -> disables its thinking
-    think = int(spec.get("thinking") or 0)
+    raw_think = spec.get("thinking")
+    off = (raw_think == "disabled") or (raw_think == 0)     # explicit no-thinking arm
+    think = 0 if (raw_think is None or isinstance(raw_think, str)) else int(raw_think)
     effort = spec.get("effort")
 
     if provider == "anthropic":
         opts = dict(model=spec["vertex_id"], max_tokens=max_tokens,
                     system=[{"type": "text", "text": system}],
                     messages=[{"role": "user", "content": user}])
-        if effort:
+        if off:
+            opts["thinking"] = {"type": "disabled"}
+        elif effort:
             opts["thinking"] = {"type": "adaptive"}
             opts["output_config"] = {"effort": effort}
         elif think:
@@ -127,8 +131,8 @@ def _one_call(spec, system, user, grounding, max_tokens):
             sys_instr = ("You MUST call the google_search tool to verify CURRENT Hong Kong usage "
                          "BEFORE answering. Never answer from memory.\n\n") + system
         cfg["system_instruction"] = sys_instr
-        if "thinking" in spec:                      # explicit budget; 0 disables Gemini's thinking
-            cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=think)
+        if "thinking" in spec:                      # budget; 0/"disabled" turns Gemini thinking off
+            cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=0 if off else think)
         gclient = _genai_client(spec.get("region", "global"))  # hold ref: must outlive the stream
         stream = gclient.models.generate_content_stream(
             model=spec["vertex_id"], contents=user, config=types.GenerateContentConfig(**cfg))
