@@ -28,10 +28,14 @@ import rag        # noqa: E402
 import webfetch   # noqa: E402
 
 
-def load_task(task_dir):
+def load_task(task_dir, testset=None):
     t = yaml.safe_load((task_dir / "task.yaml").read_text())
     t["_system"] = (task_dir / t["prompt_file"]).read_text()
-    t["_items"] = [json.loads(l) for l in (task_dir / t["testset_file"]).read_text().splitlines() if l.strip()]
+    # --testset overrides task.yaml, so a run can target the full local set without editing (and
+    # silently mis-sizing) the committed config.
+    tsf = testset or t["testset_file"]
+    t["_items"] = [json.loads(l) for l in (task_dir / tsf).read_text().splitlines() if l.strip()]
+    t["_testset"] = tsf
     return t
 
 
@@ -63,12 +67,13 @@ def main():
     ap.add_argument("--contexts", default="none", help="comma list: none,web,glossary")
     ap.add_argument("--tiers", default="", help="only items in these tiers (comma list)")
     ap.add_argument("--models", default="")
+    ap.add_argument("--testset", default="", help="override task.yaml testset_file")
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
     task_dir = pathlib.Path(args.task_dir)
-    task = load_task(task_dir)
+    task = load_task(task_dir, args.testset or None)
     models = task["models"]
     if args.models:
         want = {m.strip() for m in args.models.split(",")}
@@ -95,6 +100,7 @@ def main():
     (outdir / "meta.json").write_text(json.dumps({
         "task": task["name"], "project": providers.PROJECT, "timestamp": ts,
         "models": [m["id"] for m in models], "contexts": contexts, "tiers": args.tiers or "all",
+        "testset": task.get("_testset"),
         "n_items": len(items), "n_tasks": len(tasks)}, indent=2, ensure_ascii=False))
 
     print(f"Task {task['name']}: {len(tasks)} calls ({len(models)} models x {len(items)} items x "

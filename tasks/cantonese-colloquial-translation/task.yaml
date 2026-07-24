@@ -49,6 +49,11 @@ rubric: |
 # Candidate models (Vertex AI Model Garden IDs verified 2026-07-22 in wz-cloud-claude).
 # grounding: true = provider has a hosted web-search tool (Anthropic web_search / Gemini google_search).
 models:
+  - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, grounding: true}
+  # Optional reasoning arm (supported by engine/providers.py, not run in the published table —
+  # it'd be an extra row, not an extra column). Opus 5 uses adaptive thinking + output_config.effort;
+  # the older thinking.budget_tokens API 400s on it. Uncomment to include:
+  # - {id: claude-opus-5-think, provider: anthropic, vertex_id: claude-opus-5, region: global, grounding: true, effort: high}
   - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, grounding: true}
   - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, grounding: true}
   - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: true}

@@ -76,10 +76,24 @@ def _one_call(spec, system, user, grounding, max_tokens):
         if ttft[0] is None:
             ttft[0] = time.monotonic() - t0
 
+    # Optional reasoning knobs, modelled as a MODEL VARIANT (not a context) so the thinking arm
+    # still competes head-to-head inside the judge's (item, condition) group:
+    #   effort:   "low"|"medium"|"high"  -> Opus 5+ API (adaptive thinking + output_config.effort)
+    #   thinking: <token budget>         -> older Claude API (thinking.type.enabled)
+    #   thinking: 0 on Gemini            -> disables its thinking
+    think = int(spec.get("thinking") or 0)
+    effort = spec.get("effort")
+
     if provider == "anthropic":
         opts = dict(model=spec["vertex_id"], max_tokens=max_tokens,
                     system=[{"type": "text", "text": system}],
                     messages=[{"role": "user", "content": user}])
+        if effort:
+            opts["thinking"] = {"type": "adaptive"}
+            opts["output_config"] = {"effort": effort}
+        elif think:
+            opts["thinking"] = {"type": "enabled", "budget_tokens": think}
+            opts["max_tokens"] = max(max_tokens, think + 2000)   # room for the answer after thinking
         if grounding:
             # FORCE a web fetch. Left to itself (even with thinking) Claude skips web_search
             # ~99% of the time; tool_choice="any" guarantees at least one search while still
@@ -113,6 +127,8 @@ def _one_call(spec, system, user, grounding, max_tokens):
             sys_instr = ("You MUST call the google_search tool to verify CURRENT Hong Kong usage "
                          "BEFORE answering. Never answer from memory.\n\n") + system
         cfg["system_instruction"] = sys_instr
+        if "thinking" in spec:                      # explicit budget; 0 disables Gemini's thinking
+            cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=think)
         gclient = _genai_client(spec.get("region", "global"))  # hold ref: must outlive the stream
         stream = gclient.models.generate_content_stream(
             model=spec["vertex_id"], contents=user, config=types.GenerateContentConfig(**cfg))
