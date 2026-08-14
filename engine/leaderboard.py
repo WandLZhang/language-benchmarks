@@ -12,9 +12,9 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TASKS = ROOT / "tasks"
 
-# metric key -> short column header. Single quality metric: "did it produce correct,
-# authentic colloquial HK Cantonese for the input?"
-SHORT = {"overall": "Quality (1-5)"}
+# metric key -> short column header. "overall" is the shared quality metric across tasks: "did it
+# produce correct, authentic colloquial HK Cantonese for the input?" Tasks may add their own.
+SHORT = {"overall": "Quality (1-5)", "fidelity": "Page fidelity", "vividness": "Vividness"}
 
 HEADER = """# language-benchmarks
 
@@ -76,9 +76,26 @@ def main():
 
     pending = all(s is None for _, s in tasks)
 
-    # sub-columns per task = its metrics + Win% + p50 + Web Δ (did web-grounding help)
-    def subcols(cfg):
-        return [SHORT.get(c, c) for c in cfg["metrics"]] + ["Win%", "p50 s", "Web Δ"]
+    # Sub-columns per task = its metrics + p50, plus Win% / Web Δ ONLY where that task actually has
+    # values. A reference-scored task has no comparative Win%, and a task without a grounding axis has
+    # no Web Δ — printing permanent "—" columns for them just makes the table wider and harder to read.
+    def has(s, key, sub=None):
+        if not s:
+            return False
+        return any(((md.get(sub) or {}).get(key) if sub else md.get(key)) is not None
+                   for md in s["models"].values())
+
+    def extras(s):
+        cols = []
+        if has(s, "win_pct"):
+            cols.append("Win%")
+        cols.append("p50 s")
+        if has(s, "delta", "grounding") or has(s, "delta", "web"):
+            cols.append("Web Δ")
+        return cols
+
+    def subcols(cfg, s):
+        return [SHORT.get(c, c) for c in cfg["metrics"]] + extras(s)
 
     # union of models: ranked by first task's overall if scored, else task.yaml order
     order, seen = [], set()
@@ -91,10 +108,10 @@ def main():
 
     h = ['<table>', '<thead>', '<tr>', '<th rowspan="2">Model</th>']
     for cfg, _ in tasks:
-        h.append(f'<th colspan="{len(subcols(cfg))}" align="center">{cfg["title"]}</th>')
+        h.append(f'<th colspan="{len(subcols(cfg, _))}" align="center">{cfg["title"]}</th>')
     h.append('</tr>\n<tr>')
-    for cfg, _ in tasks:
-        for sc in subcols(cfg):
+    for cfg, s in tasks:
+        for sc in subcols(cfg, s):
             h.append(f'<th>{sc}</th>')
     h.append('</tr>\n</thead>\n<tbody>')
 
@@ -103,16 +120,21 @@ def main():
         for cfg, s in tasks:
             md = s["models"].get(m) if s else None
             if not md:
-                row += ['<td align="center">—</td>'] * len(subcols(cfg))
+                row += ['<td align="center">—</td>'] * len(subcols(cfg, s))
                 continue
             for c in cfg["metrics"]:
                 v = md.get(c)
                 cell = f'<b>{fmt(v)}</b>' if c == "overall" else fmt(v)
                 row.append(f'<td align="center">{cell}</td>')
-            wp = md.get("win_pct")
-            row.append(f'<td align="center">{("%.0f%%" % wp) if wp is not None else "—"}</td>')
-            row.append(f'<td align="center">{fmt(md.get("p50_total_s"))}</td>')
-            row.append(f'<td align="center">{fmt((md.get("web") or md.get("grounding") or {}).get("delta"))}</td>')
+            for sc in extras(s):
+                if sc == "Win%":
+                    wp = md.get("win_pct")
+                    row.append(f'<td align="center">{("%.0f%%" % wp) if wp is not None else "—"}</td>')
+                elif sc == "p50 s":
+                    row.append(f'<td align="center">{fmt(md.get("p50_total_s"))}</td>')
+                else:
+                    row.append(f'<td align="center">'
+                               f'{fmt((md.get("web") or md.get("grounding") or {}).get("delta"))}</td>')
         row.append('</tr>')
         h.append("".join(row))
     h.append('</tbody>\n</table>')

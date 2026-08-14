@@ -18,7 +18,10 @@ testset_file: testset.jsonl
 #   cer          = mean character error rate (0-1, LOWER better)
 #   false_insert = share of NEGATIVE-CONTROL clips where the model emitted the target vocabulary word
 #                  that was never spoken (0-1, LOWER better). This is the cost of biasing; see README.
-metrics: [overall, cer, false_insert]   # overall = judged MEANING 1-5 (captions are cleaned-up prose, so char metrics understate); cer/exact_sim are diagnostics
+# Only the headline goes on the leaderboard: overall = judged MEANING 1-5. cer/exact_sim/coverage and
+# false_insert are still computed and land in the run's report.md — they are diagnostics, not rankings
+# (against cleaned-up captions every model sits near CER 0.95, and false_insert is 0.00 / n-a here).
+metrics: [overall]
 
 # Scored with the SHIPPED biasing config (question + target word) so ids stay comparable with the
 # other tasks' rows. The bias axis (none | question | question+word) is reported inside report.md.

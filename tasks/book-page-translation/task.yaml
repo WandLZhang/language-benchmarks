@@ -1,0 +1,86 @@
+# Book-page translation task. NOTE: this task does NOT use engine/run_bench.py — that harness sends
+# text prompts through providers.call_model, which has no image path. The runner here
+# (bench_pages.py) is self-contained but writes results/<ts>/summary.json in the SAME shape
+# report.py emits, so engine/leaderboard.py picks it up as another merged column group with no
+# engine changes. Same precedent as tasks/speech-to-text/bench_stt.py.
+
+name: book-page-translation
+title: "Children's Book Page Translation"
+description: >
+  Photograph a page of a children's book and render it as colloquial Hong Kong Cantonese (口語) —
+  the real workload behind cloud-claude's starred story chats. Two source languages: Chinese
+  picture books (中→粵) and English picture books (EN→普粵). Reference-free: an LLM panel sees the
+  page photo itself and scores the candidate against it.
+
+  This is a VISION task, so the field is narrower than the text-only Cantonese task: Grok, Qwen and
+  DeepSeek on Vertex MaaS take text only and are excluded rather than scored as zeros.
+
+  QUALITY-FIRST: this workload is latency-insensitive (pages are translated once, read many times),
+  so every Claude arm runs adaptive thinking at effort=max and ranking ignores latency entirely.
+  Latency is still recorded, never used to break a tie.
+
+testset_file: testset.jsonl     # built by pull_pages.py from the real starred chats (gitignored)
+
+# Sub-columns in the leaderboard = these metrics, then Win% / p50 s / Web Δ.
+#   overall   = colloquial HK Cantonese authenticity + meaning (1-5) — same bar as the text task
+#   fidelity  = does it render THIS page, nothing added, nothing dropped (1-5). The metric that
+#               catches cloud-claude's real failure: 灰姑娘 doc [8] held a second copy of page 4
+#               while page 3's translation vanished. A model that writes the next page of a story
+#               it already knows scores 1 here no matter how pretty the Cantonese is.
+#   vividness = storybook liveliness a child would enjoy (1-5): ABB/AAB shapes, onomatopoeia,
+#               sentence-final particles, concrete imagery — versus flat, dutiful prose.
+metrics: [overall, fidelity, vividness]
+
+# Context axis — the architectural question behind the mismatch bug.
+#   stateless : one page per call, no story history        (candidate replacement)
+#   history   : prior pages + the model's own prior output (what cloud-claude does today; this is
+#               what lets a model drift into "produce the next page of a story I know")
+#   glossary  : stateless + Words.hk (粵典) glossary-RAG via engine/rag.py
+# The leaderboard is scored at `stateless`; Web Δ reports glossary − stateless.
+context_modes: [stateless, history, glossary]
+scored_mode: stateless
+
+judges:
+  - {id: gemini-judge, provider: gemini,    vertex_id: gemini-3.5-flash, region: global}
+  - {id: opus-judge,   provider: anthropic, vertex_id: claude-opus-4-8,  region: global}
+
+rubric: |
+  You are judging translations of ONE page of a children's picture book into Hong Kong Cantonese.
+  The page photo is attached — it is the ground truth. Every candidate was given that same photo.
+
+  Score each candidate on THREE independent 1-5 scales (5 best):
+
+  1. fidelity — does it render the text ON THIS PAGE, and only that?
+     5 = every clause on the page is there, nothing invented, nothing dropped
+     3 = one clause dropped or one detail invented
+     1 = it translated a DIFFERENT page, continued the story from memory, summarised, or is empty.
+     A beautiful translation of the wrong page is a 1. Judge this first and judge it strictly.
+     Ignore the printed pinyin/romanization guides on the page; only the Chinese/English text counts.
+
+  2. overall — authentic colloquial HK Cantonese (口語).
+     Genuinely spoken Cantonese: 嘅/喺/唔/佢/啲/咗, correct classifiers and sentence-final particles,
+     natural word order. NOT Mandarin-in-disguise, NOT written 書面語 with a few particles bolted on.
+     Meaning and register must survive. Cap at 1 if there is no Cantonese, romanization leaked into
+     the output, or the text is garbled. If a Mandarin line is also present, ignore it here.
+
+  3. vividness — would a Hong Kong parent enjoy reading this aloud to a child?
+     Reward ABB/AAB shapes (靜雞雞、慢慢嚟), real onomatopoeia, lively particles (啦/喇/囉/㗎/喎/噃),
+     concrete child-facing imagery, varied intensifiers. Penalise flat dutiful prose, repeated
+     stock phrasing, and adult/bureaucratic register. A literal but lifeless rendering is a 2.
+
+  Be discriminating — do not cluster scores. Return ONLY JSON:
+  {"scores":{"A":{"fidelity":n,"overall":n,"vividness":n,"why":"<=12 words"},...},"best":"X"}
+
+# Vision-capable candidates only. claude-opus-4-7 is the INCUMBENT — it is what
+# cloud-claude/functions/chat/main.py deploys today, and it appears in no other task's table, so it
+# has to be here or a model change can't be justified.
+# effort: max -> adaptive thinking at maximum effort (the runner falls back and says so if a model
+# rejects output_config.effort).
+models:
+  - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, effort: max}
+  - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, effort: max}
+  - {id: claude-opus-4-7,       provider: anthropic, vertex_id: claude-opus-4-7,       region: global, effort: max}
+  - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, effort: max}
+  - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global}
+  - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global}
+  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global}

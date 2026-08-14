@@ -16,6 +16,11 @@ tasks/chinese-sentence-generation/testset.jsonl
 # tasks/speech-to-text/testset.example.jsonl is the sanitised, reproducible version.
 tasks/speech-to-text/testset.jsonl
 
+# PRIVATE — book-page testset. The photos are third-party children's-book pages and the rows embed
+# Firebase Storage download tokens. Rebuild locally with pull_pages.py; aggregates publish as usual.
+tasks/book-page-translation/testset.jsonl
+tasks/book-page-translation/pages/
+
 # Downloaded model weights (237 MB, fetched from the pinned sherpa-onnx release) — never commit.
 models/
 # Clip audio cut from YouTube for tier A — third-party content, kept local.
