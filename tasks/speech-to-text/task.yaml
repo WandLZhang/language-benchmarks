@@ -1,0 +1,36 @@
+# Speech-to-text task. NOTE: this task does NOT use engine/run_bench.py — that harness sends text
+# prompts through providers.call_model, which has no audio path. The runner here (bench_stt.py) is
+# self-contained but writes results/<ts>/summary.json in the SAME shape report.py emits, so
+# engine/leaderboard.py picks it up as another merged column group with no engine changes.
+
+name: speech-to-text
+title: "Cantonese/Mandarin Speech-to-Text"
+description: >
+  Transcribe a short spoken Cantonese/Mandarin reply. The bar is proper nouns and rare vocabulary —
+  the words a language learner actually needs back verbatim (brand and place names;
+  查获, 慷慨, 指摘). Classic ASR tends to mangle exactly those; audio-native LLMs tend not to.
+  Reference-based (not judged): scored against known transcripts, so no LLM judge panel.
+
+testset_file: testset.jsonl
+
+# Sub-columns in the leaderboard = these metrics, then Win% / p50 s / Web Δ (n/a here -> "—").
+#   overall      = mean similarity to the reference transcript (0-1, higher better)
+#   cer          = mean character error rate (0-1, LOWER better)
+#   false_insert = share of NEGATIVE-CONTROL clips where the model emitted the target vocabulary word
+#                  that was never spoken (0-1, LOWER better). This is the cost of biasing; see README.
+metrics: [overall, cer, false_insert]   # overall = judged MEANING 1-5 (captions are cleaned-up prose, so char metrics understate); cer/exact_sim are diagnostics
+
+# Scored with the SHIPPED biasing config (question + target word) so ids stay comparable with the
+# other tasks' rows. The bias axis (none | question | question+word) is reported inside report.md.
+models:
+  - {id: gemini-3.6-flash,      provider: gemini, vertex_id: gemini-3.6-flash,      region: global}
+  - {id: gemini-3.5-flash,      provider: gemini, vertex_id: gemini-3.5-flash,      region: global}
+  - {id: gemini-3.5-flash-lite, provider: gemini, vertex_id: gemini-3.5-flash-lite, region: global}
+  - {id: chirp_2,               provider: stt_v2, vertex_id: chirp_2,               region: us-central1}
+  - {id: chirp_3,               provider: stt_v2, vertex_id: chirp_3,               region: us}          # chirp_3 is only in the "us" multi-region
+  # On-device (sherpa-onnx SenseVoice) — the model already running on the phone in
+  # subtitle-everything/mobile-audio. Unreachable from a web page, but if it wins on speed/accuracy
+  # that is the argument for a native shell. Only runs when --sherpa-dir is passed.
+  - {id: sensevoice-ondevice,   provider: sherpa, vertex_id: sense-voice-small,     region: local}
+
+judges: []   # reference-based, no judge panel

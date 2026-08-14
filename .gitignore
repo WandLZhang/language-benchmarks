@@ -11,6 +11,15 @@ tasks/*/testset_full_local.jsonl
 # PRIVATE — sentence-gen prompts embed personal facts (family, work). Kept local; the task's
 # aggregate scores are still published in the README, only the raw items stay off GitHub.
 tasks/chinese-sentence-generation/testset.jsonl
+# PRIVATE — the STT testset plants the owner's real names/places (family, school, church, town) to
+# test proper-noun retention. Same rule: aggregates publish, raw items stay local.
+# tasks/speech-to-text/testset.example.jsonl is the sanitised, reproducible version.
+tasks/speech-to-text/testset.jsonl
+
+# Downloaded model weights (237 MB, fetched from the pinned sherpa-onnx release) — never commit.
+models/
+# Clip audio cut from YouTube for tier A — third-party content, kept local.
+clips/
 
 .DS_Store
 *.env
