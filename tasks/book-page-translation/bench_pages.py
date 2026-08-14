@@ -26,6 +26,7 @@ Run:
 """
 import argparse
 import base64
+import concurrent.futures as cf
 import datetime
 import json
 import os
@@ -33,6 +34,7 @@ import pathlib
 import random
 import statistics
 import sys
+import threading
 import time
 from collections import defaultdict
 
@@ -48,8 +50,14 @@ import rag  # noqa: E402  — Words.hk glossary retrieval, shared with the text 
 
 PROJECT = os.getenv("LT_PROJECT", "wz-cloud-claude")
 UID = os.getenv("LT_UID", "xoBY9nLz8ObwvIRPdJ855EBmAlv2")
-MAX_TOKENS = 8000
 MAX_RETRIES = 3
+
+# Each model's ceiling, probed against Vertex. Latency does not matter here and adaptive thinking
+# spends from the SAME budget as the answer, so anything less silently truncates: at max_tokens=8000
+# claude-sonnet-5 returned stop_reason='max_tokens' with 8000 thinking tokens and ZERO text on 11 of
+# 24 pages, which reads as a quality collapse in the table when it is a budget failure.
+MAX_TOKENS = {"anthropic": 128000, "gemini": 65536}
+JUDGE_MAX_TOKENS = 8000
 
 _genai = genai.Client(vertexai=True, project=PROJECT, location="global")
 _ant = AnthropicVertex(region="global", project_id=PROJECT)
@@ -104,10 +112,19 @@ def _anthropic_call(spec, system, turns, max_tokens):
             opts.pop("thinking", None)
             opts.pop("output_config", None)
         try:
-            r = _ant.messages.create(**opts)
+            # Streaming is mandatory at these budgets: the SDK refuses a non-streaming call whose
+            # max_tokens could take over 10 minutes.
+            with _ant.messages.stream(**opts) as st:
+                for _ in st:
+                    pass
+                r = st.get_final_message()
             if strip:
                 print(f"      note: {spec['id']} rejected output_config.effort — ran without it")
-            return "".join(b.text for b in r.content if getattr(b, "type", None) == "text").strip()
+            text = "".join(b.text for b in r.content if getattr(b, "type", None) == "text").strip()
+            if not text and getattr(r, "stop_reason", None) == "max_tokens":
+                raise RuntimeError(f"{spec['id']} hit max_tokens with no text "
+                                   f"({r.usage.output_tokens} tokens of thinking) — raise MAX_TOKENS")
+            return text
         except Exception as e:  # noqa: BLE001
             if not strip and "effort" in str(e).lower():
                 continue
@@ -130,9 +147,10 @@ def _gemini_call(spec, system, turns, max_tokens):
     return (r.text or "").strip()
 
 
-def generate(spec, system, turns, max_tokens=MAX_TOKENS):
+def generate(spec, system, turns, max_tokens=None):
     """Returns (text, latency_s). Retries transient failures; raises on the last one."""
     fn = _anthropic_call if spec["provider"] == "anthropic" else _gemini_call
+    max_tokens = max_tokens or MAX_TOKENS[spec["provider"]]
     last = None
     for attempt in range(MAX_RETRIES):
         t0 = time.monotonic()
@@ -146,29 +164,39 @@ def generate(spec, system, turns, max_tokens=MAX_TOKENS):
 
 
 # ---------- judging ----------
-def judge_page(jspec, rubric, image, candidates):
-    """One comparative, anonymised call per judge per page-arm. Sees the page photo itself."""
+def judge_page(jspec, rubric, image, candidates, seed):
+    """One comparative, anonymised call per judge per page-arm. Sees the page photo itself.
+
+    The label order is reshuffled PER PAGE (seed = item id) — a fixed order would give every model
+    the same position on all 24 pages and bake position bias straight into the means.
+    """
     order = list(candidates.items())
-    random.Random(hash(tuple(sorted(candidates))) & 0xFFFFFFFF).shuffle(order)
+    random.Random(seed).shuffle(order)
     labels = [chr(ord("A") + i) for i in range(len(order))]
     blocks = "\n\n".join(f"### Candidate {lab}\n{(txt or '(empty)')}" for lab, (_, txt) in zip(labels, order))
-    user = (f"{blocks}\n\nScore every candidate against the attached page photo. JSON only.")
+    user = (f"{blocks}\n\nScore every candidate against the attached page photo. JSON only — and "
+            f'put no quotation marks of any kind inside the "why" values.')
 
-    if jspec["provider"] == "anthropic":
-        raw = _anthropic_call({"id": jspec["id"], "provider": "anthropic", "vertex_id": jspec["vertex_id"]},
-                              rubric, [(image, user, "user")], 3000)
-    else:
-        raw = _gemini_call({"id": jspec["id"], "provider": "gemini", "vertex_id": jspec["vertex_id"]},
-                           rubric, [(image, user, "user")], 3000)
-    a, b = raw.find("{"), raw.rfind("}")
-    if a < 0 or b < 0:
-        raise ValueError(f"judge returned no JSON: {raw[:120]}")
-    parsed = json.loads(raw[a:b + 1])
-    scores = parsed.get("scores", {})
-    best_label = parsed.get("best")
-    out = {mid: scores.get(lab) or {} for lab, (mid, _) in zip(labels, order)}
-    best = next((mid for lab, (mid, _) in zip(labels, order) if lab == best_label), None)
-    return out, best
+    spec = {"id": jspec["id"], "provider": jspec["provider"], "vertex_id": jspec["vertex_id"]}
+    fn = _anthropic_call if jspec["provider"] == "anthropic" else _gemini_call
+    last = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            raw = fn(spec, rubric, [(image, user, "user")], JUDGE_MAX_TOKENS)
+            a, b = raw.find("{"), raw.rfind("}")
+            if a < 0 or b < 0:
+                raise ValueError(f"judge returned no JSON: {raw[:120]}")
+            parsed = json.loads(raw[a:b + 1])
+            scores = parsed.get("scores", {})
+            best_label = parsed.get("best")
+            out = {mid: scores.get(lab) or {} for lab, (mid, _) in zip(labels, order)}
+            best = next((mid for lab, (mid, _) in zip(labels, order) if lab == best_label), None)
+            return out, best
+        except Exception as e:  # noqa: BLE001 — a stray quote inside "why" breaks the JSON; re-ask
+            last = e
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 * (attempt + 1))
+    raise last
 
 
 def main():
@@ -176,6 +204,7 @@ def main():
     ap.add_argument("--models", default="", help="comma list of task.yaml model ids")
     ap.add_argument("--modes", default="", help="comma list of context modes")
     ap.add_argument("--limit", type=int, default=0, help="cap pages per book (debug)")
+    ap.add_argument("--workers", type=int, default=8, help="parallel chains / judge calls")
     ap.add_argument("--tag", default="", help="results dir name instead of a timestamp")
     args = ap.parse_args()
 
@@ -211,92 +240,114 @@ def main():
           f"models {[m['id'] for m in models]}\n")
 
     # ---- generate --------------------------------------------------------------------------
+    # One chain = (model, mode, book). Chains are independent and run in parallel; pages WITHIN a
+    # chain stay sequential because `history` has to accumulate the model's own prior outputs in
+    # page order.
     gen = {}            # (model_id, mode, item_id) -> text
     lats = defaultdict(list)
     errs = defaultdict(int)
     glossary_cache = {}
+    lock = threading.Lock()
     rawf = open(outdir / "raw.jsonl", "w", encoding="utf-8")
 
-    for m in models:
-        for mode in modes:
-            by_book = defaultdict(list)
-            for it in items:
-                by_book[it["chat_id"]].append(it)
-            for chat_id, pages in by_book.items():
-                pages.sort(key=lambda p: p["page_index"])
-                hist = []
-                for it in pages:
-                    tpl = templates[it["template_id"]]
-                    system = tpl["system"]
-                    instr = f"{tpl['content']}\n\n{PAGE_INSTRUCTION}"
+    by_book = defaultdict(list)
+    for it in items:
+        by_book[it["chat_id"]].append(it)
+    for pages in by_book.values():
+        pages.sort(key=lambda p: p["page_index"])
 
-                    if mode == "glossary":
-                        q = it["source_text"] or it["book"]
-                        if q not in glossary_cache:
-                            try:
-                                glossary_cache[q] = rag.context_block(q, k=8)
-                            except Exception as e:  # noqa: BLE001
-                                print(f"    glossary retrieval failed ({str(e)[:60]}) — ungrounded")
-                                glossary_cache[q] = ""
-                        system = system + glossary_cache[q]
+    def glossary_for(it):
+        q = it["source_text"] or it["book"]
+        with lock:
+            hit = q in glossary_cache
+        if not hit:
+            try:
+                block = rag.context_block(q, k=8)
+            except Exception as e:  # noqa: BLE001
+                print(f"    glossary retrieval failed ({str(e)[:60]}) — running ungrounded")
+                block = ""
+            with lock:
+                glossary_cache[q] = block
+        return glossary_cache[q]
 
-                    turns = (hist if mode == "history" else []) + [(it["_img"], instr, "user")]
-                    print(f"  {m['id']:22} {mode:9} {it['id']} p{it['page_index']} "
-                          f"[{len(turns)} turns, sys {len(system)}ch]", end=" ", flush=True)
-                    try:
-                        text, lat = generate(m, system, turns)
-                        gen[(m["id"], mode, it["id"])] = text
-                        lats[(m["id"], mode)].append(lat)
-                        print(f"{lat:5.1f}s  {text[:48].replace(chr(10), ' ')}")
-                    except Exception as e:  # noqa: BLE001
-                        errs[(m["id"], mode)] += 1
-                        text = ""
-                        gen[(m["id"], mode, it["id"])] = ""
-                        print(f"ERROR {str(e)[:70]}")
-                        lat = None
-                    rawf.write(json.dumps({"model_id": m["id"], "mode": mode, "item_id": it["id"],
-                                           "book": it["book"], "page_index": it["page_index"],
-                                           "source_lang": it["source_lang"],
-                                           "system_len": len(system), "instruction": instr,
-                                           "source_text": it["source_text"], "output": text,
-                                           "lat_s": round(lat, 2) if lat else None},
-                                          ensure_ascii=False) + "\n")
-                    rawf.flush()
-                    if mode == "history":
-                        hist = hist + [(it["_img"], instr, "user"), (None, text or "(no output)", "assistant")]
+    def run_chain(m, mode, pages):
+        hist = []
+        for it in pages:
+            tpl = templates[it["template_id"]]
+            system = tpl["system"]
+            instr = f"{tpl['content']}\n\n{PAGE_INSTRUCTION}"
+            if mode == "glossary":
+                system = system + glossary_for(it)
+            turns = (hist if mode == "history" else []) + [(it["_img"], instr, "user")]
+            try:
+                text, lat = generate(m, system, turns)
+                note = f"{lat:5.1f}s  {text[:44]}".replace("\n", " ")
+            except Exception as e:  # noqa: BLE001
+                text, lat = "", None
+                note = f"ERROR {str(e)[:70]}"
+            with lock:
+                gen[(m["id"], mode, it["id"])] = text
+                if lat is None:
+                    errs[(m["id"], mode)] += 1
+                else:
+                    lats[(m["id"], mode)].append(lat)
+                rawf.write(json.dumps({"model_id": m["id"], "mode": mode, "item_id": it["id"],
+                                       "book": it["book"], "page_index": it["page_index"],
+                                       "source_lang": it["source_lang"], "system_len": len(system),
+                                       "instruction": instr, "source_text": it["source_text"],
+                                       "n_turns": len(turns), "output": text,
+                                       "lat_s": round(lat, 2) if lat else None},
+                                      ensure_ascii=False) + "\n")
+                rawf.flush()
+                print(f"  {m['id']:22} {mode:9} {it['id']} p{it['page_index']} "
+                      f"[{len(turns)}t] {note}")
+            if mode == "history":
+                hist = hist + [(it["_img"], instr, "user"), (None, text or "(no output)", "assistant")]
+
+    chains = [(m, mode, pages) for m in models for mode in modes for pages in by_book.values()]
+    print(f"generating: {len(chains)} chains, {sum(len(p) for _, _, p in chains)} calls, "
+          f"{args.workers} workers\n")
+    with cf.ThreadPoolExecutor(max_workers=args.workers) as ex:
+        list(ex.map(lambda c: run_chain(*c), chains))
     rawf.close()
 
     # ---- judge -----------------------------------------------------------------------------
     scores = defaultdict(lambda: defaultdict(list))   # (model,mode) -> metric -> [values]
     wins = defaultdict(int)
     judged_n = defaultdict(int)
-    with open(outdir / "judged.jsonl", "w", encoding="utf-8") as jf:
-        for mode in modes:
-            for it in items:
-                cands = {m["id"]: gen.get((m["id"], mode, it["id"]), "") for m in models}
-                for j in cfg["judges"]:
-                    try:
-                        per, best = judge_page(j, cfg["rubric"], it["_img"], cands)
-                    except Exception as e:  # noqa: BLE001
-                        print(f"  judge {j['id']} {mode} {it['id']} FAILED: {str(e)[:70]}")
-                        continue
-                    for mid, sc in per.items():
-                        for k in metrics:
-                            if isinstance(sc.get(k), (int, float)):
-                                scores[(mid, mode)][k].append(float(sc[k]))
-                    if best:
-                        wins[(best, mode)] += 1
-                    judged_n[mode] += 1
-                    jf.write(json.dumps({"mode": mode, "item_id": it["id"], "judge": j["id"],
-                                         "best": best, "scores": per}, ensure_ascii=False) + "\n")
-                    jf.flush()
-                line = "  ".join(
-                    f"{mid.replace('claude-','').replace('gemini-','g'):14}"
-                    f"f{statistics.mean(scores[(mid, mode)]['fidelity'][-1:] or [0]):.0f}"
-                    f"/o{statistics.mean(scores[(mid, mode)]['overall'][-1:] or [0]):.0f}"
-                    f"/v{statistics.mean(scores[(mid, mode)]['vividness'][-1:] or [0]):.0f}"
-                    for mid in cands)
-                print(f"  judged {mode:9} {it['id']}  {line}")
+    jf = open(outdir / "judged.jsonl", "w", encoding="utf-8")
+
+    def run_judge(mode, it, j):
+        cands = {m["id"]: gen.get((m["id"], mode, it["id"]), "") for m in models}
+        try:
+            per, best = judge_page(j, cfg["rubric"], it["_img"], cands, seed=it["id"])
+        except Exception as e:  # noqa: BLE001
+            with lock:
+                print(f"  judge {j['id']:13} {mode:9} {it['id']} FAILED: {str(e)[:70]}")
+            return
+        with lock:
+            for mid, sc in per.items():
+                for k in metrics:
+                    if isinstance(sc.get(k), (int, float)):
+                        scores[(mid, mode)][k].append(float(sc[k]))
+            if best:
+                wins[(best, mode)] += 1
+            judged_n[mode] += 1
+            jf.write(json.dumps({"mode": mode, "item_id": it["id"], "judge": j["id"],
+                                 "best": best, "scores": per}, ensure_ascii=False) + "\n")
+            jf.flush()
+            line = "  ".join(f"{mid.split('-', 1)[-1][:12]:12}"
+                             f"f{(per.get(mid) or {}).get('fidelity', 0) or 0:.0f}"
+                             f"/o{(per.get(mid) or {}).get('overall', 0) or 0:.0f}"
+                             f"/v{(per.get(mid) or {}).get('vividness', 0) or 0:.0f}"
+                             for mid in cands)
+            print(f"  judged {j['id']:13} {mode:9} {it['id']}  best={best}  {line}")
+
+    jobs = [(mode, it, j) for mode in modes for it in items for j in cfg["judges"]]
+    print(f"\njudging: {len(jobs)} calls, {args.workers} workers\n")
+    with cf.ThreadPoolExecutor(max_workers=args.workers) as ex:
+        list(ex.map(lambda t: run_judge(*t), jobs))
+    jf.close()
 
     # ---- aggregate -------------------------------------------------------------------------
     def mean(xs):
@@ -357,9 +408,19 @@ def main():
                  f"{f(d['p50_total_s'], 1)} | {d['errors']} |")
     L += [f"\nWinner rule: {summary['winner_rule']}.\n",
           "\n## Context axis\n",
-          "`history` is what cloud-claude does today — prior pages plus the model's own prior "
-          "outputs in context. A fidelity drop from `stateless` to `history` is the model writing "
-          "the next page of a story it already knows instead of the page in front of it.\n",
+          "`history` = prior pages plus the model's own prior outputs, the shape cloud-claude "
+          "already uses. The worry was drift — a model writing the next page of a story it "
+          "recognises instead of the page in front of it — which would show as a fidelity drop "
+          "from `stateless`.\n",
+          "\nThat is not what the numbers say. With the per-page instruction restated on every "
+          "turn, history HELPS the strong models (opus-5 colloquial 4.49 -> 4.69, vividness "
+          "3.99 -> 4.12) and only hurts the weak ones (gemini-3.5-flash-lite colloquial "
+          "4.10 -> 3.76). Story context keeps names and register consistent; what actually broke "
+          "cloud-claude was the EMPTY user message on image turns, not the history itself. "
+          "Measured over runs of up to 5 prior pages — do not extrapolate to a 70-page context.\n",
+          "\n`glossary` (Words.hk RAG) buys fidelity but costs vividness on the winner "
+          "(opus-5: fidelity 4.85 -> 4.94, vividness 3.99 -> 3.87), so it is not worth a retrieval "
+          "hop for this task.\n",
           "| Model | Mode | Fidelity | Colloquial | Vividness |", "|---|---|---|---|---|"]
     for mid in ranked:
         for mo, d in summary["models"][mid]["context_axis"].items():

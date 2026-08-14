@@ -38,7 +38,14 @@ METHODOLOGY = """
 - **Judge panel across families** (Claude + Gemini), anonymized & comparative, to blunt
   position/self-preference bias; small gaps ≈ ties. LLM-judges are weaker on dialects, so treat
   as directional and calibrate with humans for high-stakes calls.
-- **Latency is a separate axis** (TTFT + total), never blended into quality.
+- **Latency is a separate axis** (TTFT + total), never blended into quality. Some tasks are
+  explicitly latency-insensitive and rank on quality alone — book pages are translated once and
+  read many times.
+- **Truncation is not a score.** Adaptive thinking spends from the same budget as the answer, so a
+  too-small `max_tokens` returns `stop_reason=max_tokens` with zero text — which a judge reads as a
+  quality collapse. Measured: claude-sonnet-5 at effort=max produced empty output on 11 of 24 book
+  pages at `max_tokens=8000`, scoring 2.77 against its real 4.4-class range. Runners set each
+  model's ceiling and raise on empty-at-max-tokens instead of scoring it.
 - **Contextualization axis** — best practice for translation is to compare context modes
   (no-context · web-grounding · glossary/dictionary-RAG · TM few-shot). We ship no-context +
   web-grounding today; glossary-RAG (words.hk / Chain-of-Dictionary) and TM-RAG are roadmap.
