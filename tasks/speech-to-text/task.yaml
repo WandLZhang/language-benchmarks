@@ -34,6 +34,19 @@ models:
   # On-device (sherpa-onnx SenseVoice) — the model already running on the phone in
   # subtitle-everything/mobile-audio. Unreachable from a web page, but if it wins on speed/accuracy
   # that is the argument for a native shell. Only runs when --sherpa-dir is passed.
-  - {id: sensevoice-ondevice,   provider: sherpa, vertex_id: sense-voice-small,     region: local}
+  - {id: sensevoice-ondevice,   provider: sherpa, vertex_id: sense-voice-small,     region: local,
+     model_dir: models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17}
+  # Cantonese-specialised SenseVoice-Small (ASLP-lab WenetSpeech-Yue, Apache-2.0). Same 234M params
+  # and same CTC decode as the row above, so any latency difference is noise — the question is purely
+  # whether the Cantonese fine-tune transfers to podcast audio. Its own leaderboard disagrees with
+  # itself on HK: better on MDCC (5.43 vs 6.34), worse on the "HK" set (8.68 vs 7.34).
+  - {id: sensevoice-yue,        provider: sherpa, vertex_id: sense-voice-small-yue, region: local,
+     model_dir: models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09}
+  # Fun-ASR-Nano's encoder exported with a CTC head — despite the model's Qwen3-decoder reputation,
+  # THIS package is single-file and non-autoregressive, so it competes on latency. (The Qwen3-decode
+  # build is a separate repo, sherpa-onnx-funasr-nano-*-2025-12-30, and is not in this run.) Here for
+  # the noisy/music-bed case the two SenseVoice rows were never tuned for.
+  - {id: funasr-nano-ctc,       provider: sherpa, vertex_id: fun-asr-nano-2512-ctc, region: local,
+     model_dir: models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17}
 
 judges: []   # reference-based, no judge panel

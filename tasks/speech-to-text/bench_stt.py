@@ -48,6 +48,7 @@ from google import genai
 from google.genai import types
 
 HERE = pathlib.Path(__file__).parent
+ROOT = HERE.parent.parent          # repo root, for repo-relative model_dir in task.yaml
 PROJECT = os.getenv("LT_PROJECT", "wz-cloud-claude")
 AUDIO_PROJECT = os.getenv("AUDIO_PROJECT", "wz-convo-live")   # where the TTS function is deployed
 STT_REGION = os.getenv("STT_REGION", "us-central1")           # Chirp is regional
@@ -131,27 +132,49 @@ def chirp_stt(model, audio, language, region=None):
     return out.strip(), lat
 
 
-_sherpa = None
+# One recognizer per model dir, so several on-device models can be compared in a single run.
+_sherpa = {}
 
 
 def sherpa_stt(model_dir, wav_bytes):
-    global _sherpa
     import io
     import wave
     import numpy as np
     import sherpa_onnx
-    if _sherpa is None:
+    if model_dir not in _sherpa:
         cand = [p for p in glob.glob(os.path.join(model_dir, "*.onnx")) if "int8" in p] or \
                glob.glob(os.path.join(model_dir, "*.onnx"))
-        _sherpa = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-            model=cand[0], tokens=os.path.join(model_dir, "tokens.txt"), use_itn=True)
+        tokens = os.path.join(model_dir, "tokens.txt")
+        # Two Fun-ASR-Nano packages exist and they are not interchangeable. The `sherpa-onnx-
+        # sense-voice-funasr-nano-*` repos are a single-file CTC export of its encoder, so they load
+        # through from_sense_voice and stay non-autoregressive. The `sherpa-onnx-funasr-nano-*` repos
+        # are the Qwen3-decoder build and need from_funasr_nano plus four separate artifacts.
+        name = os.path.basename(model_dir.rstrip("/"))
+        if name.startswith("sherpa-onnx-funasr-nano"):
+            _sherpa[model_dir] = sherpa_onnx.OfflineRecognizer.from_funasr_nano(
+                encoder_adaptor=os.path.join(model_dir, "encoder_adaptor.onnx"),
+                llm=os.path.join(model_dir, "llm.onnx"),
+                embedding=os.path.join(model_dir, "embedding.onnx"),
+                tokenizer=model_dir)
+        else:
+            _sherpa[model_dir] = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+                model=cand[0], tokens=tokens, use_itn=True)
+    rec = _sherpa[model_dir]
     wf = wave.open(io.BytesIO(wav_bytes), "rb")
     pcm = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
     t0 = time.monotonic()
-    s = _sherpa.create_stream()
+    s = rec.create_stream()
     s.accept_waveform(wf.getframerate(), pcm)
-    _sherpa.decode_stream(s)
+    rec.decode_stream(s)
     return s.result.text.strip(), time.monotonic() - t0
+
+
+def sherpa_dir_for(model, default_dir):
+    """A sherpa row may name its own `model_dir` in task.yaml; otherwise use --sherpa-dir."""
+    d = model.get("model_dir")
+    if not d:
+        return default_dir
+    return d if os.path.isabs(d) else str(ROOT / d)
 
 
 MEANING_JUDGE = {"id": "opus48-judge", "vertex_id": "claude-opus-4-8"}
@@ -282,7 +305,7 @@ def main():
                         elif m["provider"] == "stt_v2":
                             hyp, lat = chirp_stt(m["vertex_id"], it["audio"], it["lang"], m.get("region"))
                         else:
-                            hyp, lat = sherpa_stt(args.sherpa_dir, it["audio"])
+                            hyp, lat = sherpa_stt(sherpa_dir_for(m, args.sherpa_dir), it["audio"])
                         a, c = accuracy(it["ref"], hyp), cer(it["ref"], hyp)
                         acc[key].append(a)
                         cers[key].append(c)

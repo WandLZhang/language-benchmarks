@@ -29,3 +29,6 @@ clips/
 .DS_Store
 *.env
 service-account*.json
+
+# Focused side-runs (subset of models); kept out of the leaderboard glob and off GitHub.
+tasks/*/side-runs/
