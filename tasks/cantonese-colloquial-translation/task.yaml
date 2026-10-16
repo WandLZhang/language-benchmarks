@@ -57,7 +57,9 @@ models:
   # Not run: even with thinking off, none of these (2.05-2.30s p50) beats claude-opus-4-8 at
   # 1.90s WITH its default, so a judged pass couldn't change a latency-bound choice. Uncomment
   # to measure whether disabling thinking also costs quality:
-  # - {id: claude-opus-5-nothink,    provider: anthropic, vertex_id: claude-opus-5,    region: global, grounding: true, thinking: disabled}
+  # Enabled 2026-10-16: cloud-claude's "EN -> 普粵 (everyday)" prompt runs Opus 5 with thinking off,
+  # so this is the incumbent the Claude 5.5 rows have to beat.
+  - {id: claude-opus-5-nothink,    provider: anthropic, vertex_id: claude-opus-5,    region: global, grounding: true, thinking: disabled}
   # - {id: claude-sonnet-5-nothink,  provider: anthropic, vertex_id: claude-sonnet-5,  region: global, grounding: true, thinking: disabled}
   # - {id: gemini-3.6-flash-nothink, provider: gemini,    vertex_id: gemini-3.6-flash, region: global, grounding: true, thinking: disabled}
   # - {id: gemini-3.5-flash-nothink, provider: gemini,    vertex_id: gemini-3.5-flash, region: global, grounding: true, thinking: disabled}
