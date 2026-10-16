@@ -4,7 +4,7 @@ Scans tasks/*/task.yaml + each task's latest results/*/summary.json and emits on
 whose columns are grouped under a MERGED super-header per task (use case), with the actual
 sub-metrics beneath. Add a new task folder -> it becomes a new column group automatically.
 Only models the task's task.yaml still lists get a row; retiring a model = deleting its line there.
-Scores that engine/project_runs.py moved onto the run's scale from an older run render in italics.
+A model missing from a task's newest run keeps the score from its own latest run.
 
 Usage: python engine/leaderboard.py [--out PATH]   (--out writes elsewhere, e.g. to diff first)
 """
@@ -60,12 +60,15 @@ Add a task: create `tasks/<name>/task.yaml` (models, judges, rubric, prompt, tes
 """
 
 
-def latest_summary(task_dir):
+def latest_summary(task_dir, listed):
+    """The newest run's summary, with each listed model's row from the newest run that has it."""
     res = list((task_dir / "results").glob("*/summary.json")) if (task_dir / "results").exists() else []
     if not res:
         return None
-    latest = max(res, key=lambda p: p.stat().st_mtime)  # newest by mtime, not name
-    return json.loads(latest.read_text())
+    runs = [json.loads(p.read_text()) for p in sorted(res, key=lambda p: p.stat().st_mtime)]  # by mtime, not name
+    summary = runs[-1]
+    summary["models"] = {m: md for run in runs for m, md in run["models"].items() if m in listed}
+    return summary
 
 
 def fmt(x, nd=2):
@@ -81,11 +84,7 @@ def main():
     tasks = []
     for td in sorted(p for p in TASKS.iterdir() if (p / "task.yaml").exists()):
         cfg = yaml.safe_load((td / "task.yaml").read_text())
-        s = latest_summary(td)   # may be None (skeleton / pending)
-        if s:   # old summaries still hold retired models
-            listed = {m["id"] for m in cfg["models"]}
-            s["models"] = {m: md for m, md in s["models"].items() if m in listed}
-        tasks.append((cfg, s))
+        tasks.append((cfg, latest_summary(td, {m["id"] for m in cfg["models"]})))   # None = pending
 
     if not tasks:
         out.write_text(HEADER + "\n_No tasks defined yet._\n" + METHODOLOGY)
@@ -142,8 +141,6 @@ def main():
             for c in cfg["metrics"]:
                 v = md.get(c)
                 cell = f'<b>{fmt(v)}</b>' if c == "overall" else fmt(v)
-                if md.get("projected"):
-                    cell = f'<i>{cell}</i>'
                 row.append(f'<td align="center">{cell}</td>')
             for sc in extras(s):
                 if sc == "Win%":
@@ -174,7 +171,7 @@ def main():
         "Gemini's `google_search` can't be forced inside a task prompt at all — so `web` injects a "
         "lean **forced** Gemini google_search fetch (verified **100% firing over 30 trials**) into "
         "every model. **Finding: forced web lifts nearly every model, and most the weaker/cheaper "
-        "ones** (grok-4.1-fast +0.71, qwen3-235b +0.70, sonnet-4-6 +0.57), compressing the field — "
+        "ones** (grok-4.1-fast +0.71, sonnet-4-6 +0.57), compressing the field — "
         "while the leaders are already at ceiling (gemini-3.5-flash +0.00, claude-opus-5 +0.03). A "
         "fast model + forced web (sonnet-4-6 4.22 @ 1.7s, grok-4.1-fast 3.88 @ 0.55s) closes much of "
         "the gap to the slow quality leaders.\n")
