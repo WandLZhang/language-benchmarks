@@ -149,8 +149,11 @@ def _one_call(spec, system, user, grounding, max_tokens):
                 mark(); parts.append(t)
             if getattr(chunk, "usage_metadata", None):
                 um = chunk.usage_metadata
+                thoughts = getattr(um, "thoughts_token_count", None) or 0
+                # Thinking is reported apart from the answer; both bill as output, so sum them.
                 usage = {"input_tokens": getattr(um, "prompt_token_count", None),
-                         "output_tokens": getattr(um, "candidates_token_count", None)}
+                         "output_tokens": (getattr(um, "candidates_token_count", None) or 0) + thoughts,
+                         "thoughts_tokens": thoughts}
             # Capture google_search grounding usage (was previously unmeasured for Gemini).
             for cand in (getattr(chunk, "candidates", None) or []):
                 gm = getattr(cand, "grounding_metadata", None)

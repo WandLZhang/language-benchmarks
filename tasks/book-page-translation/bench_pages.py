@@ -146,7 +146,9 @@ def _anthropic_call(spec, system, turns, max_tokens):
             if not text and getattr(r, "stop_reason", None) == "max_tokens":
                 raise RuntimeError(f"{spec['id']} hit max_tokens with no text "
                                    f"({r.usage.output_tokens} tokens of thinking) — raise MAX_TOKENS")
-            return text
+            # output_tokens already counts thinking, which bills as output.
+            usage = {"input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens}
+            return text, usage
         except Exception as e:  # noqa: BLE001
             if not strip and "effort" in str(e).lower():
                 continue
@@ -166,18 +168,25 @@ def _gemini_call(spec, system, turns, max_tokens):
         model=spec["vertex_id"], contents=contents,
         config=types.GenerateContentConfig(system_instruction=system, temperature=1.0,
                                            max_output_tokens=max_tokens))
-    return (r.text or "").strip()
+    um = r.usage_metadata
+    thoughts = getattr(um, "thoughts_token_count", None) or 0
+    # Gemini reports thinking apart from the answer; both bill as output, so output_tokens sums them.
+    usage = {"input_tokens": getattr(um, "prompt_token_count", None),
+             "output_tokens": (getattr(um, "candidates_token_count", None) or 0) + thoughts,
+             "thoughts_tokens": thoughts}
+    return (r.text or "").strip(), usage
 
 
 def generate(spec, system, turns, max_tokens=None):
-    """Returns (text, latency_s). Retries transient failures; raises on the last one."""
+    """Returns (text, usage, latency_s). Retries transient failures; raises on the last one."""
     fn = _anthropic_call if spec["provider"] == "anthropic" else _gemini_call
     max_tokens = max_tokens or MAX_TOKENS[spec["provider"]]
     last = None
     for attempt in range(MAX_RETRIES):
         t0 = time.monotonic()
         try:
-            return fn(spec, system, turns, max_tokens), time.monotonic() - t0
+            text, usage = fn(spec, system, turns, max_tokens)
+            return text, usage, time.monotonic() - t0
         except Exception as e:  # noqa: BLE001
             last = e
             if attempt < MAX_RETRIES - 1:
@@ -204,7 +213,7 @@ def judge_page(jspec, rubric, image, candidates, seed):
     last = None
     for attempt in range(MAX_RETRIES):
         try:
-            raw = fn(spec, rubric, [(image, user, "user")], JUDGE_MAX_TOKENS)
+            raw, _ = fn(spec, rubric, [(image, user, "user")], JUDGE_MAX_TOKENS)
             a, b = raw.find("{"), raw.rfind("}")
             if a < 0 or b < 0:
                 raise ValueError(f"judge returned no JSON: {raw[:120]}")
@@ -326,10 +335,10 @@ def main():
                 system = system + glossary_for(it)
             turns = (hist if mode == "history" else []) + [(it["_img"], instr, "user")]
             try:
-                text, lat = generate(m, system, turns)
+                text, usage, lat = generate(m, system, turns)
                 note = f"{lat:5.1f}s  {text[:44]}".replace("\n", " ")
             except Exception as e:  # noqa: BLE001
-                text, lat = "", None
+                text, usage, lat = "", {}, None
                 note = f"ERROR {str(e)[:70]}"
             with lock:
                 gen[(m["id"], mode, it["id"])] = text
@@ -341,7 +350,7 @@ def main():
                                        "book": it["book"], "page_index": it["page_index"],
                                        "source_lang": it["source_lang"], "system_len": len(system),
                                        "instruction": instr, "source_text": it["source_text"],
-                                       "n_turns": len(turns), "output": text,
+                                       "n_turns": len(turns), "output": text, "usage": usage,
                                        "lat_s": round(lat, 2) if lat else None},
                                       ensure_ascii=False) + "\n")
                 rawf.flush()
