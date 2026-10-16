@@ -28,9 +28,6 @@ metrics: [overall]
 models:
   - {id: gemini-3.6-flash,      provider: gemini, vertex_id: gemini-3.6-flash,      region: global}
   - {id: gemini-3.5-flash,      provider: gemini, vertex_id: gemini-3.5-flash,      region: global}
-  - {id: gemini-3.5-flash-lite, provider: gemini, vertex_id: gemini-3.5-flash-lite, region: global}
-  - {id: chirp_2,               provider: stt_v2, vertex_id: chirp_2,               region: us-central1}
-  - {id: chirp_3,               provider: stt_v2, vertex_id: chirp_3,               region: us}          # chirp_3 is only in the "us" multi-region
   # On-device (sherpa-onnx SenseVoice) — the model already running on the phone in
   # subtitle-everything/mobile-audio. Unreachable from a web page, but if it wins on speed/accuracy
   # that is the argument for a native shell. Only runs when --sherpa-dir is passed.
@@ -48,5 +45,7 @@ models:
   # the noisy/music-bed case the two SenseVoice rows were never tuned for.
   - {id: funasr-nano-ctc,       provider: sherpa, vertex_id: fun-asr-nano-2512-ctc, region: local,
      model_dir: models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17}
+  # Retired 2026-10-16 (no app calls them): gemini-3.5-flash-lite, chirp_2, chirp_3. chirp_3 lives only
+  # in the "us" multi-region (provider stt_v2).
 
 judges: []   # reference-based, no judge panel

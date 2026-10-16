@@ -3,8 +3,10 @@
 Scans tasks/*/task.yaml + each task's latest results/*/summary.json and emits one HTML table
 whose columns are grouped under a MERGED super-header per task (use case), with the actual
 sub-metrics beneath. Add a new task folder -> it becomes a new column group automatically.
+Only models the task's task.yaml still lists get a row; retiring a model = deleting its line there.
+Scores that engine/project_runs.py moved onto the run's scale from an older run render in italics.
 
-Usage: python engine/leaderboard.py
+Usage: python engine/leaderboard.py [--out PATH]   (--out writes elsewhere, e.g. to diff first)
 """
 import json
 import pathlib
@@ -71,14 +73,22 @@ def fmt(x, nd=2):
 
 
 def main():
+    import argparse
     import yaml
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", type=pathlib.Path, default=ROOT / "README.md")
+    out = ap.parse_args().out
     tasks = []
     for td in sorted(p for p in TASKS.iterdir() if (p / "task.yaml").exists()):
         cfg = yaml.safe_load((td / "task.yaml").read_text())
-        tasks.append((cfg, latest_summary(td)))   # summ may be None (skeleton / pending)
+        s = latest_summary(td)   # may be None (skeleton / pending)
+        if s:   # old summaries still hold retired models
+            listed = {m["id"] for m in cfg["models"]}
+            s["models"] = {m: md for m, md in s["models"].items() if m in listed}
+        tasks.append((cfg, s))
 
     if not tasks:
-        (ROOT / "README.md").write_text(HEADER + "\n_No tasks defined yet._\n" + METHODOLOGY)
+        out.write_text(HEADER + "\n_No tasks defined yet._\n" + METHODOLOGY)
         return
 
     pending = all(s is None for _, s in tasks)
@@ -132,6 +142,8 @@ def main():
             for c in cfg["metrics"]:
                 v = md.get(c)
                 cell = f'<b>{fmt(v)}</b>' if c == "overall" else fmt(v)
+                if md.get("projected"):
+                    cell = f'<i>{cell}</i>'
                 row.append(f'<td align="center">{cell}</td>')
             for sc in extras(s):
                 if sc == "Win%":
@@ -166,9 +178,9 @@ def main():
         "while the leaders are already at ceiling (gemini-3.5-flash +0.00, claude-opus-5 +0.03). A "
         "fast model + forced web (sonnet-4-6 4.22 @ 1.7s, grok-4.1-fast 3.88 @ 0.55s) closes much of "
         "the gap to the slow quality leaders.\n")
-    (ROOT / "README.md").write_text(HEADER + "\n## Leaderboard\n" + banner + web_caveat + "\n"
-                                    + "\n".join(h) + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
-    print(f"Wrote {ROOT/'README.md'} ({'pending' if pending else 'scored'}), "
+    out.write_text(HEADER + "\n## Leaderboard\n" + banner + web_caveat + "\n"
+                   + "\n".join(h) + "\n" + "\n".join(notes) + "\n" + METHODOLOGY)
+    print(f"Wrote {out} ({'pending' if pending else 'scored'}), "
           f"{len(tasks)} task(s), {len(order)} models.")
 
 

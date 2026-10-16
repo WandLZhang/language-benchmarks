@@ -71,22 +71,20 @@ rubric: |
   Be discriminating — do not cluster scores. Return ONLY JSON:
   {"scores":{"A":{"fidelity":n,"overall":n,"vividness":n,"why":"<=12 words"},...},"best":"X"}
 
-# Vision-capable candidates only. claude-opus-4-7 is the INCUMBENT — it is what
-# cloud-claude/functions/chat/main.py deploys today, and it appears in no other task's table, so it
-# has to be here or a model change can't be justified.
+# Vision-capable candidates only. claude-opus-5 is the incumbent: cloud-claude/functions/chat/main.py
+# deploys it.
 # effort: max -> adaptive thinking at maximum effort (the runner falls back and says so if a model
 # rejects output_config.effort).
 models:
   - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, effort: max}
   - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, effort: max}
-  - {id: claude-opus-4-7,       provider: anthropic, vertex_id: claude-opus-4-7,       region: global, effort: max}
   - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, effort: max}
   - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global}
   - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global}
-  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global}
   # Added 2026-10-16. The Claude 5.5 models aren't enabled in wz-cloud-claude yet, so they run in
   # the project where they're enabled for testing (`project` overrides LT_PROJECT for one model).
   - {id: claude-opus-5-5,       provider: anthropic, vertex_id: claude-opus-5-5,       region: global, effort: max, project: wz-workload-viz-toxicology}
   - {id: claude-sonnet-5-5,     provider: anthropic, vertex_id: claude-sonnet-5-5,     region: global, effort: max, project: wz-workload-viz-toxicology}
   - {id: claude-haiku-5-5,      provider: anthropic, vertex_id: claude-haiku-5-5,      region: global, effort: max, project: wz-workload-viz-toxicology}
   - {id: gemini-4-argon,        provider: gemini,    vertex_id: gemini-4-argon,        region: global}
+  # Retired 2026-10-16 (no app calls them): claude-opus-4-7, gemini-3.5-flash-lite.

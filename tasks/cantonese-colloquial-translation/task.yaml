@@ -70,11 +70,7 @@ models:
   - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: true}
   - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global, grounding: true}
   - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global, grounding: true}
-  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global, grounding: true}
-  - {id: grok-4.20,             provider: maas, publisher: xai,         vertex_id: grok-4.20-non-reasoning, region: global, grounding: false}
   - {id: grok-4.1-fast,         provider: maas, publisher: xai,         vertex_id: grok-4.1-fast-non-reasoning, region: global, grounding: false}
-  - {id: qwen3-235b,            provider: maas, publisher: qwen,        vertex_id: qwen3-235b-a22b-instruct-2507-maas, region: global, grounding: false}
-  - {id: deepseek-v3.2,         provider: maas, publisher: deepseek-ai, vertex_id: deepseek-v3.2-maas, region: global, grounding: false}
   # Added 2026-10-16. The Claude 5.5 models aren't enabled in wz-cloud-claude yet, so they run in
   # the project where they're enabled for testing (`project` overrides LT_PROJECT for one model).
   # Opus 5.5 can't turn thinking off (400 at every effort), so its fast arm is effort low: the
@@ -85,5 +81,6 @@ models:
   - {id: claude-haiku-5-5,           provider: anthropic, vertex_id: claude-haiku-5-5,  region: global, grounding: true, project: wz-workload-viz-toxicology}
   - {id: gemini-4-argon,             provider: gemini,    vertex_id: gemini-4-argon,    region: global, grounding: true}
   # Excluded: kimi-k2-thinking (unusable — empty outputs / 18s+ latency, documented round 1).
+  # Retired 2026-10-16 (no app calls them): gemini-3.5-flash-lite, grok-4.20, qwen3-235b, deepseek-v3.2.
   # grounding:false models can't self-search on Vertex MaaS; in web mode they get an injected
   # Gemini-google-search fetch (see engine/webfetch.py; bake-off winner over Claude web_search 28-17).

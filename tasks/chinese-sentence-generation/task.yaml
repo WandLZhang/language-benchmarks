@@ -16,8 +16,8 @@ testset_file: testset.jsonl
 user_template: "{text}"
 max_tokens: 1200   # headroom for thinking models (opus-5 spends ~130 tokens thinking before the text)
 
-# Judge panel: two families, anonymized + comparative (blunts self-preference; grok/qwen/deepseek
-# are candidates, and opus is too, so the Gemini cross-judge is the guard).
+# Judge panel: two families, anonymized + comparative (blunts self-preference; grok is a candidate,
+# and opus is too, so the Gemini cross-judge is the guard).
 judges:
   - {id: opus-judge,   provider: anthropic, vertex_id: claude-opus-4-8,  region: global}
   - {id: gemini-judge, provider: gemini,    vertex_id: gemini-3.6-flash,  region: global}
@@ -45,24 +45,21 @@ rubric: |
   Be discriminating — do NOT cluster scores; use the full 1-5 range. Return ONLY JSON:
   {"scores":{"A":{"overall":n,"rationale":"<=12 words"},...},"best":"X"}
 
-# Full Model Garden roster (Vertex IDs verified 2026-07-22 in wz-cloud-claude), incl. the app's
-# current generator grok-4.1-fast.
+# Candidates (Vertex IDs verified 2026-07-22 in wz-cloud-claude), incl. the app's current generator
+# claude-sonnet-5.
 models:
   - {id: claude-opus-5,         provider: anthropic, vertex_id: claude-opus-5,         region: global, grounding: false}
   - {id: claude-opus-4-8,       provider: anthropic, vertex_id: claude-opus-4-8,       region: global, grounding: false}
   - {id: claude-sonnet-5,       provider: anthropic, vertex_id: claude-sonnet-5,       region: global, grounding: false}
   - {id: claude-sonnet-4-6,     provider: anthropic, vertex_id: claude-sonnet-4-6,     region: global, grounding: false}
-  - {id: claude-haiku-4-5,      provider: anthropic, vertex_id: claude-haiku-4-5,      region: global, grounding: false}
   - {id: gemini-3.6-flash,      provider: gemini,    vertex_id: gemini-3.6-flash,      region: global, grounding: false}
   - {id: gemini-3.5-flash,      provider: gemini,    vertex_id: gemini-3.5-flash,      region: global, grounding: false}
-  - {id: gemini-3.5-flash-lite, provider: gemini,    vertex_id: gemini-3.5-flash-lite, region: global, grounding: false}
-  - {id: grok-4.20,             provider: maas, publisher: xai,         vertex_id: grok-4.20-non-reasoning,            region: global, grounding: false}
   - {id: grok-4.1-fast,         provider: maas, publisher: xai,         vertex_id: grok-4.1-fast-non-reasoning,        region: global, grounding: false}
-  - {id: qwen3-235b,            provider: maas, publisher: qwen,        vertex_id: qwen3-235b-a22b-instruct-2507-maas, region: global, grounding: false}
-  - {id: deepseek-v3.2,         provider: maas, publisher: deepseek-ai, vertex_id: deepseek-v3.2-maas,                 region: global, grounding: false}
   # Added 2026-10-16. The Claude 5.5 models aren't enabled in wz-cloud-claude yet, so they run in
   # the project where they're enabled for testing (`project` overrides LT_PROJECT for one model).
   - {id: claude-opus-5-5,       provider: anthropic, vertex_id: claude-opus-5-5,       region: global, grounding: false, project: wz-workload-viz-toxicology}
   - {id: claude-sonnet-5-5,     provider: anthropic, vertex_id: claude-sonnet-5-5,     region: global, grounding: false, project: wz-workload-viz-toxicology}
   - {id: claude-haiku-5-5,      provider: anthropic, vertex_id: claude-haiku-5-5,      region: global, grounding: false, project: wz-workload-viz-toxicology}
   - {id: gemini-4-argon,        provider: gemini,    vertex_id: gemini-4-argon,        region: global, grounding: false}
+  # Retired 2026-10-16 (no app calls them): claude-haiku-4-5, gemini-3.5-flash-lite, grok-4.20,
+  # qwen3-235b, deepseek-v3.2.
