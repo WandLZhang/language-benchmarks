@@ -23,19 +23,26 @@ _genai_clients = {}
 _token_cache = {"token": None, "exp": 0.0}
 
 
-def _anthropic_client(region):
+def project_for(spec):
+    """A model spec can name its own `project` — a new model enabled in a test project before it's
+    enabled in LT_PROJECT. Everything else (judges included) runs in LT_PROJECT."""
+    return spec.get("project") or PROJECT
+
+
+def _anthropic_client(region, project):
     from anthropic import AnthropicVertex
-    if region not in _anthropic_clients:
-        _anthropic_clients[region] = AnthropicVertex(region=region, project_id=PROJECT)
-    return _anthropic_clients[region]
+    key = (region, project)
+    if key not in _anthropic_clients:
+        _anthropic_clients[key] = AnthropicVertex(region=region, project_id=project)
+    return _anthropic_clients[key]
 
 
-def _genai_client(location):
+def _genai_client(location, project):
     from google import genai
     # Fresh client per call: the genai/httpx client is NOT safe to share across
     # threads for concurrent streaming (raises "client has been closed" when one
     # thread's stream context closes the shared transport). Cheap to construct.
-    return genai.Client(vertexai=True, project=PROJECT, location=location)
+    return genai.Client(vertexai=True, project=project, location=location)
 
 
 def _access_token():
@@ -52,10 +59,10 @@ def _access_token():
     return creds.token
 
 
-def _maas_client(region):
+def _maas_client(region, project):
     import openai
     host = "aiplatform.googleapis.com" if region == "global" else f"{region}-aiplatform.googleapis.com"
-    base = f"https://{host}/v1/projects/{PROJECT}/locations/{region}/endpoints/openapi"
+    base = f"https://{host}/v1/projects/{project}/locations/{region}/endpoints/openapi"
     return openai.OpenAI(base_url=base, api_key=_access_token())
 
 
@@ -106,7 +113,7 @@ def _one_call(spec, system, user, grounding, max_tokens):
             opts["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]
             opts["tool_choice"] = {"type": "any"}
             opts["max_tokens"] = max(max_tokens, 8000)
-        with _anthropic_client(spec.get("region", "global")).messages.stream(**opts) as stream:
+        with _anthropic_client(spec.get("region", "global"), project_for(spec)).messages.stream(**opts) as stream:
             for ev in stream:
                 if getattr(ev, "type", None) == "content_block_delta" and hasattr(ev, "delta"):
                     t = getattr(ev.delta, "text", None)
@@ -133,7 +140,7 @@ def _one_call(spec, system, user, grounding, max_tokens):
         cfg["system_instruction"] = sys_instr
         if "thinking" in spec:                      # budget; 0/"disabled" turns Gemini thinking off
             cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=0 if off else think)
-        gclient = _genai_client(spec.get("region", "global"))  # hold ref: must outlive the stream
+        gclient = _genai_client(spec.get("region", "global"), project_for(spec))  # hold ref: must outlive the stream
         stream = gclient.models.generate_content_stream(
             model=spec["vertex_id"], contents=user, config=types.GenerateContentConfig(**cfg))
         for chunk in stream:
@@ -155,7 +162,7 @@ def _one_call(spec, system, user, grounding, max_tokens):
 
     elif provider == "maas":
         model = f'{spec["publisher"]}/{spec["vertex_id"]}'
-        stream = _maas_client(spec.get("region", "global")).chat.completions.create(
+        stream = _maas_client(spec.get("region", "global"), project_for(spec)).chat.completions.create(
             model=model, stream=True, max_tokens=max_tokens,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
         for chunk in stream:

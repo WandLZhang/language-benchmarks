@@ -59,8 +59,30 @@ MAX_RETRIES = 3
 MAX_TOKENS = {"anthropic": 128000, "gemini": 65536}
 JUDGE_MAX_TOKENS = 8000
 
-_genai = genai.Client(vertexai=True, project=PROJECT, location="global")
-_ant = AnthropicVertex(region="global", project_id=PROJECT)
+_ant_clients = {}
+_genai_clients = {}
+
+
+def _project(spec):
+    """A model can name its own `project` (enabled there for testing first); default LT_PROJECT."""
+    return spec.get("project") or PROJECT
+
+
+def _ant(spec):
+    project = _project(spec)
+    if project not in _ant_clients:
+        _ant_clients[project] = AnthropicVertex(region="global", project_id=project)
+    return _ant_clients[project]
+
+
+def _genai(spec):
+    # Cached, never built per call: a genai.Client closes its transport when it's garbage-collected,
+    # so `genai.Client(...).models.generate_content(...)` fails with "client has been closed". Sharing
+    # one client across threads is fine here because these calls don't stream.
+    project = _project(spec)
+    if project not in _genai_clients:
+        _genai_clients[project] = genai.Client(vertexai=True, project=project, location="global")
+    return _genai_clients[project]
 
 # Sent with EVERY page, in every arm. cloud-claude sends an empty user message on image turns, so
 # the only instruction in a 70-page chat is the first turn's one-liner; restating it per page is
@@ -114,7 +136,7 @@ def _anthropic_call(spec, system, turns, max_tokens):
         try:
             # Streaming is mandatory at these budgets: the SDK refuses a non-streaming call whose
             # max_tokens could take over 10 minutes.
-            with _ant.messages.stream(**opts) as st:
+            with _ant(spec).messages.stream(**opts) as st:
                 for _ in st:
                     pass
                 r = st.get_final_message()
@@ -140,7 +162,7 @@ def _gemini_call(spec, system, turns, max_tokens):
         if text:
             parts.append(types.Part.from_text(text=text))
         contents.append(types.Content(role="model" if role == "assistant" else "user", parts=parts))
-    r = _genai.models.generate_content(
+    r = _genai(spec).models.generate_content(
         model=spec["vertex_id"], contents=contents,
         config=types.GenerateContentConfig(system_instruction=system, temperature=1.0,
                                            max_output_tokens=max_tokens))
@@ -206,6 +228,8 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="cap pages per book (debug)")
     ap.add_argument("--workers", type=int, default=8, help="parallel chains / judge calls")
     ap.add_argument("--tag", default="", help="results dir name instead of a timestamp")
+    ap.add_argument("--reuse", default="",
+                    help="results dir whose outputs stand in for every model not in --models")
     args = ap.parse_args()
 
     cfg = yaml.safe_load((HERE / "task.yaml").read_text())
@@ -249,6 +273,28 @@ def main():
     glossary_cache = {}
     lock = threading.Lock()
     rawf = open(outdir / "raw.jsonl", "w", encoding="utf-8")
+
+    # --reuse: an earlier run's outputs stand in for every task.yaml model not being generated now,
+    # so a new model is judged against the whole field without re-running it. Judging is
+    # comparative, so every page group is re-judged either way.
+    reused = []
+    if args.reuse:
+        gen_ids = {m["id"] for m in models}
+        item_ids = {it["id"] for it in items}
+        for line in (HERE / "results" / args.reuse / "raw.jsonl").read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r["model_id"] in gen_ids or r["mode"] not in modes or r["item_id"] not in item_ids:
+                continue
+            gen[(r["model_id"], r["mode"], r["item_id"])] = r["output"]
+            if r.get("lat_s"):
+                lats[(r["model_id"], r["mode"])].append(r["lat_s"])
+            rawf.write(json.dumps({**r, "reused_from": args.reuse}, ensure_ascii=False) + "\n")
+        have = {key[0] for key in gen}
+        reused = [m for m in cfg["models"] if m["id"] not in gen_ids and m["id"] in have]
+        print(f"reusing {args.reuse} outputs for {[m['id'] for m in reused]}\n")
+    candidates = models + reused
 
     by_book = defaultdict(list)
     for it in items:
@@ -318,7 +364,7 @@ def main():
     jf = open(outdir / "judged.jsonl", "w", encoding="utf-8")
 
     def run_judge(mode, it, j):
-        cands = {m["id"]: gen.get((m["id"], mode, it["id"]), "") for m in models}
+        cands = {m["id"]: gen.get((m["id"], mode, it["id"]), "") for m in candidates}
         try:
             per, best = judge_page(j, cfg["rubric"], it["_img"], cands, seed=it["id"])
         except Exception as e:  # noqa: BLE001
@@ -364,7 +410,7 @@ def main():
     summary = {"task": cfg["name"], "title": cfg["title"], "n_items": len(items),
                "judges": [j["id"] for j in cfg["judges"]], "tiers": [scored], "models": {}}
     n_judgements = max(1, judged_n[scored])
-    for m in models:
+    for m in candidates:
         mid, key = m["id"], (m["id"], scored)
         off = mean(scores[key]["overall"])
         on = mean(scores[(mid, "glossary")]["overall"]) if "glossary" in modes else None
@@ -382,7 +428,7 @@ def main():
 
     # Winner: highest mean of the three quality metrics, but fidelity is a gate — a beautiful
     # translation of the wrong page is the failure this task exists to catch. Latency is ignored.
-    eligible = [m["id"] for m in models if (summary["models"][m["id"]].get("fidelity") or 0) >= 4.0]
+    eligible = [m["id"] for m in candidates if (summary["models"][m["id"]].get("fidelity") or 0) >= 4.0]
     ranked = sorted(summary["models"], key=rank_score, reverse=True)
     summary["winner"] = next((mid for mid in ranked if mid in eligible), ranked[0] if ranked else None)
     summary["winner_rule"] = "max mean(overall,fidelity,vividness) among models with fidelity >= 4.0; latency ignored"

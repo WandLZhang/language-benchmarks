@@ -60,3 +60,9 @@ models:
   - {id: grok-4.1-fast,         provider: maas, publisher: xai,         vertex_id: grok-4.1-fast-non-reasoning,        region: global, grounding: false}
   - {id: qwen3-235b,            provider: maas, publisher: qwen,        vertex_id: qwen3-235b-a22b-instruct-2507-maas, region: global, grounding: false}
   - {id: deepseek-v3.2,         provider: maas, publisher: deepseek-ai, vertex_id: deepseek-v3.2-maas,                 region: global, grounding: false}
+  # Added 2026-10-16. The Claude 5.5 models aren't enabled in wz-cloud-claude yet, so they run in
+  # the project where they're enabled for testing (`project` overrides LT_PROJECT for one model).
+  - {id: claude-opus-5-5,       provider: anthropic, vertex_id: claude-opus-5-5,       region: global, grounding: false, project: wz-workload-viz-toxicology}
+  - {id: claude-sonnet-5-5,     provider: anthropic, vertex_id: claude-sonnet-5-5,     region: global, grounding: false, project: wz-workload-viz-toxicology}
+  - {id: claude-haiku-5-5,      provider: anthropic, vertex_id: claude-haiku-5-5,      region: global, grounding: false, project: wz-workload-viz-toxicology}
+  - {id: gemini-4-argon,        provider: gemini,    vertex_id: gemini-4-argon,        region: global, grounding: false}
